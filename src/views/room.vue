@@ -158,7 +158,7 @@ const goToPage = (routePath: string) => {
 
 .translator-toggle-btn {
   position: fixed;
-  top: 20px;
+  top: 70px;
   right: 20px;
   width: 50px;
   height: 50px;
