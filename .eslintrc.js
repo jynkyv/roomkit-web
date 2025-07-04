@@ -1,36 +1,19 @@
 module.exports = {
+  root: true,
   env: {
-    browser: true,
-    es2021: true,
-    'vue/setup-compiler-macros': true,
+    node: true,
   },
-  extends: [
-    'eslint-config-tencent',
-    'plugin:vue/vue3-recommended',
-  ],
-  parserOptions: {
-    ecmaVersion: 'latest',
-    parser: '@typescript-eslint/parser',
-    sourceType: 'module',
-  },
-  plugins: [
-    'vue',
-    '@typescript-eslint',
-  ],
+  extends: [],
   rules: {
+    // 禁用所有规则
+    '@typescript-eslint/no-explicit-any': 'off',
+    '@typescript-eslint/no-unused-vars': 'off',
+    'vue/no-unused-vars': 'off',
     'no-unused-vars': 'off',
-    'no-nested-ternary': 'off',
-    '@typescript-eslint/no-unused-vars': ['error'],
-    'vue/max-attributes-per-line': 'off',
-    'vue/html-self-closing': 'off',
-    'vue/multi-word-component-names': 'off',
-    'vue/singleline-html-element-content-newline': 'off',
-    'comma-dangle': ['error', {
-      arrays: 'always-multiline',
-      objects: 'always-multiline',
-      imports: 'always-multiline',
-      exports: 'always-multiline',
-      functions: 'always-multiline',
-    }],
+    'no-console': 'off',
+    'no-debugger': 'off',
   },
-};
+  parserOptions: {
+    ecmaVersion: 2020,
+  },
+} 

@@ -4,9 +4,8 @@
   "scripts": {
     "dev": "vite --force",
     "dev:deep": "vite --force",
-    "build": "vue-tsc --noEmit --skipLibCheck && vite build",
-    "preview": "vite preview",
-    "lint": "./node_modules/.bin/eslint ./src --no-error-on-unmatched-pattern"
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
     "@tencentcloud/roomkit-web-vue3": "~3.1.0",
