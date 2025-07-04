@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.50.3",
     "@tencentcloud/roomkit-web-vue3": "~3.1.0",
     "@tencentcloud/tuiroom-engine-js": "~3.1.0",
     "@tencentcloud/uikit-base-component-vue3": "0.3.3",
