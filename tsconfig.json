@@ -11,10 +11,14 @@
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "lib": ["esnext", "dom", "dom.iterable"],
-    "allowJs": true
+    "allowJs": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
   "files": [],
-  "include": [],
+  "include": ["src/**/*"],
   "exclude": ["src/TUIRoom"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

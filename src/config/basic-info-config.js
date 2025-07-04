@@ -40,6 +40,25 @@ export const SDKSECRETKEY = '1cb3faaed3543947fa61450a179db1de95b3469d27555e305aa
 export const EXPIRETIME = 604800;
 
 /**
+ * AI转录功能配置
+ * 请替换为你的腾讯云API密钥
+ */
+export const AI_TRANSCRIPTION_CONFIG = {
+  // 腾讯云API密钥ID（请替换为你的密钥）
+  SECRET_ID: 'AKIDqY4jPs7OYYMxNo7HE0abTEqGbny1tdCo',
+  // 腾讯云API密钥Key（请替换为你的密钥）
+  SECRET_KEY: 'Yu48EKH3cbP3e2CF8odEfuwoV186tVyI',
+  // 地域，默认为广州
+  REGION: 'ap-guangzhou',
+  // 是否启用AI转录功能
+  ENABLED: true,
+  // 转录模式：0-全房间，1-指定用户
+  TRANSCRIPTION_MODE: 0,
+  // 最大空闲时间（秒）
+  MAX_IDLE_TIME: 60,
+};
+
+/**
  * Set user information on the push side
  *
  */
