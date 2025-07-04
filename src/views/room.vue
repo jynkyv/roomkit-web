@@ -4,17 +4,12 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue';
-import { ConferenceMainView, conference, RoomEvent, LanguageOption, ThemeOption, roomService } from '@tencentcloud/roomkit-web-vue3';
+import { ConferenceMainView, conference, RoomEvent, LanguageOption, ThemeOption } from '@tencentcloud/roomkit-web-vue3';
 import { onBeforeRouteLeave, useRoute } from 'vue-router';
-import router from '../router';
+import router from '@/router';
 import i18n, { useI18n } from '../locales/index';
 import { getLanguage, getTheme } from  '../utils/utils';
 import { useUIKit } from '@tencentcloud/uikit-base-component-vue3';
-import { startAITranscription } from '../http';
-import { generateBotUserInfo } from '../utils/generateUserSig';
-
-// 在 conference-main-view 组件 onmounted 之前调用
-roomService.setComponentConfig({ AIControl: { visible: true } });
 const { t } = useI18n();
 const { theme } = useUIKit();
 
@@ -27,9 +22,6 @@ conference.setLanguage(getLanguage() as LanguageOption);
 let isMaster = false;
 let isExpectedJump = false;
 
-// 获取 sdkAppId
-const sdkAppId = JSON.parse(roomInfo as string)?.roomParam?.sdkAppId || JSON.parse(userInfo as string)?.sdkAppId;
-
 if (!roomId) {
   router.push({ path: 'home' });
 } else if (!roomInfo) {
@@ -38,12 +30,12 @@ if (!roomId) {
 
 onMounted(async () => {
   const { action, isSeatEnabled, roomParam, hasCreated } = JSON.parse(roomInfo as string);
-  const { sdkAppId: userSdkAppId, userId, userSig, userName, avatarUrl } = JSON.parse(userInfo as string);
+  const { sdkAppId, userId, userSig, userName, avatarUrl } = JSON.parse(userInfo as string);
   if (action === 'createRoom') {
     isMaster = true;
   }
   try {
-    await conference.login({ sdkAppId: userSdkAppId, userId, userSig });
+    await conference.login({ sdkAppId, userId, userSig });
     await conference.setSelfInfo({ userName, avatarUrl });
     if (action === 'createRoom' && !hasCreated) {
       await conference.start(roomId, {
@@ -95,22 +87,6 @@ const changeLanguage = (language: LanguageOption) => {
 const changeTheme = (theme: ThemeOption) => {
   localStorage.setItem('tuiRoom-currentTheme', theme);
 };
-
-// const handleAITask = (data: { roomId: string }) => {
-//   const { roomId } = data;
-//   // 生成随机机器人用户信息
-//   const botUserInfo = generateBotUserInfo(sdkAppId, '1cb3faaed3543947fa61450a179db1de95b3469d27555e305aace5eb5a7f5e8b'); // 请替换为您的实际密钥
-//   startAITranscription({
-//     RoomId: roomId,
-//     UserId: botUserInfo.userId, // 随机生成的机器人用户ID
-//     UserSig: botUserInfo.userSig, // 动态生成的机器人 userSig
-//     SdkAppId: sdkAppId,
-//     RoomIdType: 1, // 房间类型为字符串房间
-//   });
-// };
-
-// conference.on(RoomEvent.ROOM_JOIN, handleAITask);
-// conference.on(RoomEvent.ROOM_START, handleAITask);
 conference.on(RoomEvent.ROOM_DISMISS, backToHome);
 conference.on(RoomEvent.ROOM_LEAVE, backToHome);
 conference.on(RoomEvent.KICKED_OUT, backToHome);
@@ -122,8 +98,6 @@ conference.on(RoomEvent.LANGUAGE_CHANGED, changeLanguage);
 conference.on(RoomEvent.THEME_CHANGED, changeTheme);
 
 onUnmounted(() => {
-  conference.off(RoomEvent.ROOM_JOIN, handleAITask);
-  conference.off(RoomEvent.ROOM_START, handleAITask);
   conference.off(RoomEvent.ROOM_DISMISS, backToHome);
   conference.off(RoomEvent.ROOM_LEAVE, backToHome);
   conference.off(RoomEvent.KICKED_OUT, backToHome);
