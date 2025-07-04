@@ -1,17 +1,37 @@
 <template>
-  <conference-main-view display-mode="permanent"></conference-main-view>
+  <div class="room-container">
+    <conference-main-view display-mode="permanent"></conference-main-view>
+
+    <!-- 翻译按钮 -->
+    <button
+      @click="toggleTranslator"
+      class="translator-toggle-btn"
+      :class="{ active: showTranslator }"
+    >
+      🌐
+    </button>
+
+    <!-- 翻译组件 -->
+    <RealtimeTranslator
+      v-model:showTranslator="showTranslator"
+    />
+  </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { ConferenceMainView, conference, RoomEvent, LanguageOption, ThemeOption } from '@tencentcloud/roomkit-web-vue3';
 import { onBeforeRouteLeave, useRoute } from 'vue-router';
-import router from '@/router';
+import router from '../router/index';
 import i18n, { useI18n } from '../locales/index';
 import { getLanguage, getTheme } from  '../utils/utils';
 import { useUIKit } from '@tencentcloud/uikit-base-component-vue3';
+import RealtimeTranslator from '../components/RealtimeTranslator.vue';
 const { t } = useI18n();
 const { theme } = useUIKit();
+
+// 翻译相关状态
+const showTranslator = ref(false);
 
 const route = useRoute();
 const roomInfo = sessionStorage.getItem('tuiRoom-roomInfo');
@@ -21,6 +41,11 @@ conference.setLanguage(getLanguage() as LanguageOption);
 !theme.value && conference.setTheme(getTheme() as ThemeOption);
 let isMaster = false;
 let isExpectedJump = false;
+
+// 翻译相关方法
+const toggleTranslator = () => {
+  showTranslator.value = !showTranslator.value;
+};
 
 if (!roomId) {
   router.push({ path: 'home' });
@@ -123,5 +148,52 @@ const goToPage = (routePath: string) => {
   font-family: 'PingFang SC';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.room-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.translator-toggle-btn {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #e9ecef;
+  font-size: 20px;
+  cursor: pointer;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: #f8f9fa;
+    border-color: #28a745;
+    transform: scale(1.05);
+  }
+
+  &.active {
+    background: #28a745;
+    border-color: #28a745;
+    color: #fff;
+  }
+}
+
+@media (max-width: 768px) {
+  .translator-toggle-btn {
+    top: 10px;
+    right: 10px;
+    width: 45px;
+    height: 45px;
+    font-size: 18px;
+  }
 }
 </style>

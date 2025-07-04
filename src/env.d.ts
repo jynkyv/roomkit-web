@@ -12,6 +12,8 @@ declare module '*.vue' {
 interface ImportMetaEnv {
   readonly VITE_APP_TITLE: string;
   readonly VITE_RUNTIME_ENV: string;
+  readonly VITE_YOUDAO_APP_KEY: string;
+  readonly VITE_YOUDAO_APP_SECRET: string;
 }
 
 interface ImportMeta {
