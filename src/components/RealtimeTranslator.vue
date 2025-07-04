@@ -55,16 +55,24 @@
   <!-- 双语字幕显示 -->
   <div class="subtitle-container" v-if="showTranslator && (recognitionResults.length > 0 || translationResults.length > 0)">
     <div class="subtitle-content">
-      <div v-for="(result, index) in subtitleResults" :key="index" class="subtitle-item">
-        <div class="subtitle-original">{{ result.original }}</div>
-        <div class="subtitle-translation">{{ result.translation }}</div>
-      </div>
+      <transition-group name="subtitle-fade" tag="div">
+        <div 
+          v-for="(result, index) in subtitleResults" 
+          :key="result.id" 
+          class="subtitle-item"
+          :class="{ 'fade-out': !visibleSubtitles.has(result.id) }"
+          v-show="visibleSubtitles.has(result.id)"
+        >
+          <div class="subtitle-original">{{ result.original }}</div>
+          <div class="subtitle-translation">{{ result.translation }}</div>
+        </div>
+      </transition-group>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted, watch } from 'vue'
 
 // 环境变量
 const appKey = import.meta.env.VITE_YOUDAO_APP_KEY;
@@ -337,10 +345,17 @@ const formatTime = (timestamp: number): string => {
   return date.toLocaleTimeString()
 }
 
+// 监听字幕变化
+watch(subtitleResults, (newResults, oldResults) => {
+  if (newResults.length > (oldResults?.length || 0)) {
+    addNewSubtitle();
+  }
+}, { deep: true });
+
 // 组件卸载时清理资源
 onUnmounted(() => {
-  stopRecording()
-})
+  stopRecording();
+});
 </script>
 
 <style scoped>
@@ -628,5 +643,27 @@ onUnmounted(() => {
   .subtitle-translation {
     font-size: 12px;
   }
+}
+
+/* 字幕淡入淡出动画 */
+.subtitle-fade-enter-active,
+.subtitle-fade-leave-active {
+  transition: all 0.8s ease;
+}
+
+.subtitle-fade-enter-from {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.subtitle-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-20px);
+}
+
+.subtitle-item.fade-out {
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: all 0.5s ease;
 }
 </style> 
