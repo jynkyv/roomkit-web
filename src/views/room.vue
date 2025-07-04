@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { ConferenceMainView, conference, RoomEvent, LanguageOption, ThemeOption, roomService } from '@tencentcloud/roomkit-web-vue3';
 import { onBeforeRouteLeave, useRoute } from 'vue-router';
 import router from '../router';
@@ -27,6 +27,10 @@ conference.setLanguage(getLanguage() as LanguageOption);
 let isMaster = false;
 let isExpectedJump = false;
 
+// AI字幕数据
+const aiTranscriptionData = ref<any[]>([]);
+const aiSubtitleMessages = ref<{[key: string]: any}>({});
+
 // 获取 sdkAppId
 const sdkAppId = JSON.parse(roomInfo as string)?.roomParam?.sdkAppId || JSON.parse(userInfo as string)?.sdkAppId;
 
@@ -35,6 +39,50 @@ if (!roomId) {
 } else if (!roomInfo) {
   router.push({ path: 'home', query: { roomId } });
 }
+
+// 处理AI字幕数据
+const handleAITranscriptionTask = (data: {
+  subtitleMessages: { [key: string]: any };
+  transcribedMessageList: any[];
+}) => {
+  console.log('收到AI字幕数据:', data);
+  aiSubtitleMessages.value = data.subtitleMessages;
+  aiTranscriptionData.value = data.transcribedMessageList;
+  
+  // 打印最新的字幕
+  if (data.transcribedMessageList.length > 0) {
+    const latestSubtitle = data.transcribedMessageList[data.transcribedMessageList.length - 1];
+    console.log('最新字幕:', {
+      sender: latestSubtitle.sender,
+      text: latestSubtitle.text,
+      translationText: latestSubtitle.translationText,
+      time: new Date(latestSubtitle.startMsTs).toLocaleTimeString()
+    });
+  }
+};
+
+// 获取AI字幕数据的方法
+const getAITranscriptionData = () => {
+  return {
+    subtitleMessages: roomService.aiTask.subtitleMessages,
+    transcribedMessageList: roomService.aiTask.transcribedMessageList,
+  };
+};
+
+// 监听AI字幕事件
+const setupAITranscriptionListener = () => {
+  // 监听AI字幕任务事件
+  roomService.aiTask.on('transcription', handleAITranscriptionTask);
+  
+  // 也可以直接获取当前数据
+  const currentData = getAITranscriptionData();
+  console.log('当前AI字幕数据:', currentData);
+};
+
+// 清理AI字幕监听
+const cleanupAITranscriptionListener = () => {
+  roomService.aiTask.off('transcription', handleAITranscriptionTask);
+};
 
 onMounted(async () => {
   const { action, isSeatEnabled, roomParam, hasCreated } = JSON.parse(roomInfo as string);
@@ -56,6 +104,9 @@ onMounted(async () => {
     } else {
       await conference.join(roomId, roomParam);
     }
+    
+    // 设置AI字幕监听
+    setupAITranscriptionListener();
   } catch (error: any) {
     sessionStorage.removeItem('tuiRoom-currentUserInfo');
   }
@@ -96,21 +147,21 @@ const changeTheme = (theme: ThemeOption) => {
   localStorage.setItem('tuiRoom-currentTheme', theme);
 };
 
-// const handleAITask = (data: { roomId: string }) => {
-//   const { roomId } = data;
-//   // 生成随机机器人用户信息
-//   const botUserInfo = generateBotUserInfo(sdkAppId, '1cb3faaed3543947fa61450a179db1de95b3469d27555e305aace5eb5a7f5e8b'); // 请替换为您的实际密钥
-//   startAITranscription({
-//     RoomId: roomId,
-//     UserId: botUserInfo.userId, // 随机生成的机器人用户ID
-//     UserSig: botUserInfo.userSig, // 动态生成的机器人 userSig
-//     SdkAppId: sdkAppId,
-//     RoomIdType: 1, // 房间类型为字符串房间
-//   });
-// };
+const handleAITask = (data: { roomId: string }) => {
+  const { roomId } = data;
+  // 生成随机机器人用户信息
+  const botUserInfo = generateBotUserInfo(sdkAppId, '1cb3faaed3543947fa61450a179db1de95b3469d27555e305aace5eb5a7f5e8b'); // 请替换为您的实际密钥
+  startAITranscription({
+    RoomId: roomId,
+    UserId: botUserInfo.userId, // 随机生成的机器人用户ID
+    UserSig: botUserInfo.userSig, // 动态生成的机器人 userSig
+    SdkAppId: sdkAppId,
+    RoomIdType: 1, // 房间类型为字符串房间
+  });
+};
 
-// conference.on(RoomEvent.ROOM_JOIN, handleAITask);
-// conference.on(RoomEvent.ROOM_START, handleAITask);
+conference.on(RoomEvent.ROOM_JOIN, handleAITask);
+conference.on(RoomEvent.ROOM_START, handleAITask);
 conference.on(RoomEvent.ROOM_DISMISS, backToHome);
 conference.on(RoomEvent.ROOM_LEAVE, backToHome);
 conference.on(RoomEvent.KICKED_OUT, backToHome);
@@ -133,12 +184,22 @@ onUnmounted(() => {
   conference.off(RoomEvent.USER_LOGOUT, backToHomeAndClearUserInfo);
   conference.off(RoomEvent.LANGUAGE_CHANGED, changeLanguage);
   conference.off(RoomEvent.THEME_CHANGED, changeTheme);
+  
+  // 清理AI字幕监听
+  cleanupAITranscriptionListener();
 });
 
 const goToPage = (routePath: string) => {
   isExpectedJump = true;
   router.replace({ path: routePath });
 };
+
+// 暴露AI字幕相关方法供外部使用
+defineExpose({
+  getAITranscriptionData,
+  aiTranscriptionData,
+  aiSubtitleMessages,
+});
 </script>
 
 <style lang="scss">
