@@ -6,7 +6,7 @@ interface IConfigManager {
   setLanguage(language: LanguageOption): void;
 }
 
-export type LanguageOption = 'zh-CN' | 'en-US';
+export type LanguageOption = 'zh-CN' | 'ja-JP';
 export type Theme = 'light' | 'dark';
 const THEME = {
   LIGHT: 'light',

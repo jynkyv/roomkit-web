@@ -17,10 +17,11 @@ export function getLanguage() {
   let language =
     getUrlParam('lang') ||
     navigator.language ||
-    (isWxMiniProgram ? 'zh-CN' : 'en-US');
+    (isWxMiniProgram ? 'zh-CN' : 'zh-CN');
   language = language.replace(/_/, '-').toLowerCase();
   const isZh = language.startsWith('zh');
-  language = isZh ? 'zh-CN' : 'en-US';
+  const isJa = language.startsWith('ja');
+  language = isZh ? 'zh-CN' : isJa ? 'ja-JP' : 'zh-CN';
 
   return language;
 }

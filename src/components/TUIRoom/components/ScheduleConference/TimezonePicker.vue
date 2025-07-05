@@ -43,10 +43,10 @@ const timeOptions = computed(() => {
   switch (currentLanguage.value) {
     case 'zh-CN':
       return timeOptionsCh.value;
-    case 'en-US':
-      return timeOptionsEn.value;
+    case 'ja-JP':
+      return timeOptionsJa.value;
     default:
-      return timeOptionsEn.value;
+      return timeOptionsCh.value;
   }
 });
 const timeOptionsCh = computed(() => [
@@ -82,46 +82,46 @@ const timeOptionsCh = computed(() => [
   { label: 'GMT+13:00 汤加标准时间', value: 'Pacific/Tongatapu' },
 ]);
 
-const timeOptionsEn = computed(() => [
-  { label: 'GMT-12:00 International Date Line West', value: 'Etc/GMT+12' },
-  { label: 'GMT-11:00 Coordinated Universal Time-11', value: 'Etc/GMT+11' },
+const timeOptionsJa = computed(() => [
+  { label: 'GMT-12:00 国際日付変更線西', value: 'Etc/GMT+12' },
+  { label: 'GMT-11:00 協定世界時-11', value: 'Etc/GMT+11' },
   {
-    label: 'GMT-10:00 Hawaii-Aleutian Standard Time',
+    label: 'GMT-10:00 ハワイ・アリューシャン標準時',
     value: 'Pacific/Honolulu',
   },
-  { label: 'GMT-09:00 Alaska Standard Time', value: 'America/Anchorage' },
-  { label: 'GMT-08:00 Pacific Standard Time', value: 'America/Los_Angeles' },
-  { label: 'GMT-07:00 Mountain Standard Time', value: 'America/Denver' },
-  { label: 'GMT-06:00 Central Standard Time', value: 'America/Chicago' },
-  { label: 'GMT-05:00 Eastern Standard Time', value: 'America/New_York' },
-  { label: 'GMT-04:00 Atlantic Standard Time', value: 'America/Halifax' },
+  { label: 'GMT-09:00 アラスカ標準時', value: 'America/Anchorage' },
+  { label: 'GMT-08:00 太平洋標準時', value: 'America/Los_Angeles' },
+  { label: 'GMT-07:00 山地標準時', value: 'America/Denver' },
+  { label: 'GMT-06:00 中部標準時', value: 'America/Chicago' },
+  { label: 'GMT-05:00 東部標準時', value: 'America/New_York' },
+  { label: 'GMT-04:00 大西洋標準時', value: 'America/Halifax' },
   {
-    label: 'GMT-03:00 Argentina Standard Time',
+    label: 'GMT-03:00 アルゼンチン標準時',
     value: 'America/Argentina/Buenos_Aires',
   },
-  { label: 'GMT-02:00 Coordinated Universal Time-02', value: 'Etc/GMT+2' },
-  { label: 'GMT-01:00 Cape Verde Standard Time', value: 'Atlantic/Cape_Verde' },
-  { label: 'GMT+00:00 Greenwich Mean Time', value: 'Europe/London' },
-  { label: 'GMT+01:00 Central European Standard Time', value: 'Europe/Berlin' },
-  { label: 'GMT+02:00 Eastern European Standard Time', value: 'Europe/Kiev' },
-  { label: 'GMT+03:00 Moscow Standard Time', value: 'Europe/Moscow' },
-  { label: 'GMT+04:00 Gulf Standard Time', value: 'Asia/Dubai' },
-  { label: 'GMT+05:00 Pakistan Standard Time', value: 'Asia/Karachi' },
-  { label: 'GMT+05:30 Indian Standard Time', value: 'Asia/Kolkata' },
-  { label: 'GMT+06:00 Bangladesh Standard Time', value: 'Asia/Dhaka' },
-  { label: 'GMT+07:00 Indochina Time', value: 'Asia/Bangkok' },
-  { label: 'GMT+08:00 China Standard Time - Beijing', value: 'Asia/Shanghai' },
-  { label: 'GMT+09:00 Japan Standard Time', value: 'Asia/Tokyo' },
+  { label: 'GMT-02:00 協定世界時-02', value: 'Etc/GMT+2' },
+  { label: 'GMT-01:00 カーボベルデ標準時', value: 'Atlantic/Cape_Verde' },
+  { label: 'GMT+00:00 グリニッジ標準時', value: 'Europe/London' },
+  { label: 'GMT+01:00 中央ヨーロッパ標準時', value: 'Europe/Berlin' },
+  { label: 'GMT+02:00 東ヨーロッパ標準時', value: 'Europe/Kiev' },
+  { label: 'GMT+03:00 モスクワ標準時', value: 'Europe/Moscow' },
+  { label: 'GMT+04:00 湾岸標準時', value: 'Asia/Dubai' },
+  { label: 'GMT+05:00 パキスタン標準時', value: 'Asia/Karachi' },
+  { label: 'GMT+05:30 インド標準時', value: 'Asia/Kolkata' },
+  { label: 'GMT+06:00 バングラデシュ標準時', value: 'Asia/Dhaka' },
+  { label: 'GMT+07:00 インドシナ時間', value: 'Asia/Bangkok' },
+  { label: 'GMT+08:00 中国標準時 - 北京', value: 'Asia/Shanghai' },
+  { label: 'GMT+09:00 日本標準時', value: 'Asia/Tokyo' },
   {
-    label: 'GMT+10:00 Australian Eastern Standard Time - Sydney',
+    label: 'GMT+10:00 オーストラリア東部標準時 - シドニー',
     value: 'Australia/Sydney',
   },
   {
-    label: 'GMT+11:00 Solomon Islands Standard Time',
+    label: 'GMT+11:00 ソロモン諸島標準時',
     value: 'Pacific/Guadalcanal',
   },
-  { label: 'GMT+12:00 New Zealand Standard Time', value: 'Pacific/Auckland' },
-  { label: 'GMT+13:00 Tonga Standard Time', value: 'Pacific/Tongatapu' },
+  { label: 'GMT+12:00 ニュージーランド標準時', value: 'Pacific/Auckland' },
+  { label: 'GMT+13:00 トンガ標準時', value: 'Pacific/Tongatapu' },
 ]);
 const handleLanguageChange = async (language: LanguageOption) => {
   currentLanguage.value = language;

@@ -290,7 +290,7 @@ export class ChatExtension {
     const chatType: ChatType = params?.chatType;
     const extension: ExtensionInfo = {
       weight: -1,
-      text: this.service?.t('quick conference') || '快速会议',
+      text: this.service?.t('quick conference') || this.service?.t('Quick Conference'),
       icon: 'https://qcloudimg.tencent-cloud.cn/raw/148ab10dfe654076b41f0d0945bb82e8.png',
       data: {
         name: 'quickRoom',

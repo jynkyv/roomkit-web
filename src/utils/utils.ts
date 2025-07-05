@@ -21,10 +21,11 @@ export function getLanguage() {
   let language = getUrlParam('lang')
     || localStorage.getItem('tuiRoom-language')
     || navigator.language
-    || 'en-US';
+    || 'zh-CN';
   language = language.replace(/_/, '-').toLowerCase();
   const isZh = language.startsWith('zh');
-  language = isZh ? 'zh-CN' : 'en-US';
+  const isJa = language.startsWith('ja');
+  language = isZh ? 'zh-CN' : isJa ? 'ja-JP' : 'zh-CN';
 
   return language;
 }

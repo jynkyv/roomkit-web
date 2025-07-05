@@ -18,8 +18,8 @@
         <IconLogoTitleOfMobileInChinese style="width: 144px; height: 23px" />
       </span>
     </div>
-    <!-- English black and white theme logo -->
-    <div v-if="isEN" :class="['pc-en-logo', { mobile: isMobile }]">
+    <!-- Japanese black and white theme logo -->
+    <div v-if="isJA" :class="['pc-ja-logo', { mobile: isMobile }]">
       <span class="logo">
         <IconLogoInEnglish style="width: 68px; height: 63px" />
       </span>
@@ -50,7 +50,7 @@ const { theme } = useUIKit();
 const basicStore = useBasicStore();
 const { defaultTheme } = storeToRefs(basicStore);
 
-const isEN = computed(() => i18n.global.locale.value === 'en-US');
+const isJA = computed(() => i18n.global.locale.value === 'ja-JP');
 const isZH = computed(() => i18n.global.locale.value === 'zh-CN');
 const isDarkTheme = computed(() =>
   theme.value ? theme.value === 'dark' : defaultTheme.value === 'dark'
@@ -61,7 +61,7 @@ const isLightTheme = computed(() =>
 </script>
 
 <style lang="scss" scoped>
-.pc-en-logo {
+.pc-ja-logo {
   display: flex;
   align-items: center;
   transform: scale(0.9);

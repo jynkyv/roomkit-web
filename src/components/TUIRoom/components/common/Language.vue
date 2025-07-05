@@ -19,15 +19,22 @@ import { roomService } from '../../services';
 
 const basicStore = useBasicStore();
 
-const title = computed(() =>
-  basicStore.lang === 'en-US' ? 'English' : '中文'
-);
+const title = computed(() => {
+  switch (basicStore.lang) {
+    case 'ja-JP':
+      return '日本語';
+    case 'zh-CN':
+    default:
+      return '中文';
+  }
+});
+
 const languageConfig = roomService.getComponentConfig('Language');
 
 const handleChange = () => {
-  roomService.setLanguage(
-    i18n.global.locale.value === 'en-US' ? 'zh-CN' : 'en-US'
-  );
+  const currentLang = i18n.global.locale.value;
+  const nextLang = currentLang === 'zh-CN' ? 'ja-JP' : 'zh-CN';
+  roomService.setLanguage(nextLang);
 };
 </script>
 

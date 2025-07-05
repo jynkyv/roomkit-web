@@ -14,11 +14,11 @@
  *
  * // switch language
  * switch (i18n.global.locale.value) {
- *  case 'en-US':
+ *  case 'ja-JP':
  *    i18n.global.locale.value = 'zh-CN';
  *    break;
  *  case 'zh-CN':
- *    i18n.global.locale.value = 'en-US';
+ *    i18n.global.locale.value = 'ja-JP';
  *    break;
  * }
  * </script>
@@ -26,7 +26,7 @@
 
 import { getLanguage } from '../utils/common';
 import ZH from './zh-CN';
-import EN from './en-US';
+import JA from './ja-JP';
 import { ref } from 'vue';
 
 const locale = ref('');
@@ -65,7 +65,7 @@ const i18n = new TUIKitI18n({
   locale: getLanguage() || 'zh-CN',
   messages: {
     'zh-CN': ZH,
-    'en-US': EN,
+    'ja-JP': JA,
   },
 });
 

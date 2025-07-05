@@ -11,6 +11,7 @@ import { clipBoard } from '../../../utils/utils';
 import useRoomInviteControl from '../../RoomInvite/useRoomInviteHooks';
 import { isWeChat } from '../../../utils/environment';
 import { roomService } from '../../../services';
+import { userInfo } from 'os';
 
 export default function useRoomInfo() {
   const { inviteLink } = useRoomInviteControl();
@@ -34,7 +35,9 @@ export default function useRoomInfo() {
 
   const isShowRoomInfoTitle = computed(() => masterUserName.value);
 
-  const conferenceTitle = computed(() => `${roomName.value}`);
+  const conferenceTitle = computed(() => {
+    return `${masterUserName.value}${t('Quick Conference')}`;
+  });
 
   const roomInfoTabList = computed(() => [
     {
