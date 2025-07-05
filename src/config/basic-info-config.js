@@ -52,19 +52,42 @@ export const userInfo = {
   avatarUrl: '',
 };
 
-export function getBasicInfo() {
+/**
+ * 修改 getBasicInfo 函数，接收真实的用户信息
+ */
+export function getBasicInfo(user = null) {
   if (SDKAPPID === Number(0) || SDKSECRETKEY === String('')) {
     alert('Please configure your SDKAPPID in config/basic-info-config.js');
     return;
   }
+
+  // 如果有真实用户信息，使用真实用户信息；否则使用默认测试用户信息
+  let userInfo;
+  if (user && user.id) {
+    userInfo = {
+      userId: user.id,
+      userName: user.name || user.email || 'User',
+      avatarUrl: user.avatar_url || '',
+    };
+  } else {
+    // 默认测试用户信息
+    userInfo = {
+      userId: `user_${Math.ceil(Math.random() * 100000)}`,
+      userName: 'myName',
+      avatarUrl: '',
+    };
+  }
+
+  console.log('生成 userSig 的用户ID:', userInfo.userId);
   const generator = new LibGenerateTestUserSig(SDKAPPID, SDKSECRETKEY, EXPIRETIME);
   const userSig = generator.genTestUserSig(userInfo.userId);
-  const { userId, userName, avatarUrl } = userInfo;
+  console.log('生成的 userSig:', userSig);
+  
   return {
     sdkAppId: SDKAPPID,
-    userId,
+    userId: userInfo.userId,
     userSig,
-    userName,
-    avatarUrl,
+    userName: userInfo.userName,
+    avatarUrl: userInfo.avatarUrl,
   };
 };

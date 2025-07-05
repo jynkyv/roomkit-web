@@ -60,6 +60,9 @@ onMounted(async () => {
     isMaster = true;
   }
   try {
+    console.log('sdkAppId', sdkAppId);
+    console.log('userId', userId);
+    console.log('userSig', userSig);
     await conference.login({ sdkAppId, userId, userSig });
     await conference.setSelfInfo({ userName, avatarUrl });
     if (action === 'createRoom' && !hasCreated) {
