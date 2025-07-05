@@ -15,7 +15,7 @@
 </template>
 
 <script setup lang="ts">
-import { PreConferenceView, conference, RoomEvent, LanguageOption, ThemeOption } from '@tencentcloud/roomkit-web-vue3';
+import { PreConferenceView, conference, RoomEvent, LanguageOption, ThemeOption } from '../components/TUIRoom/index';
 import { getBasicInfo } from '@/config/basic-info-config';
 import router from '@/router';
 import { useRoute } from 'vue-router';
