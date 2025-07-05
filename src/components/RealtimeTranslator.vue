@@ -10,6 +10,29 @@
     </div>
 
     <div class="translator-content">
+      <!-- 音频源选择 -->
+      <div class="audio-source-controls">
+        <label class="source-label">音频源:</label>
+        <select v-model="selectedAudioSource" :disabled="isRecording" class="source-select">
+          <option value="microphone">麦克风</option>
+          <option value="page-audio">页面音频</option>
+        </select>
+      </div>
+
+      <!-- 页面音频选择器 -->
+      <div v-if="selectedAudioSource === 'page-audio'" class="page-audio-controls">
+        <label class="source-label">选择音频元素:</label>
+        <select v-model="selectedAudioElement" :disabled="isRecording" class="source-select">
+          <option value="">自动检测所有音频</option>
+          <option v-for="element in audioElements" :key="element.id" :value="element.id">
+            {{ element.name }}
+          </option>
+        </select>
+        <button @click="refreshAudioElements" :disabled="isRecording" class="btn btn-refresh">
+          刷新
+        </button>
+      </div>
+
       <div class="language-controls">
         <select v-model="fromLang" :disabled="isRecording" class="lang-select">
           <option value="zh-CHS">中文</option>
@@ -74,7 +97,7 @@
 
 <script setup lang="ts">
 // @ts-nocheck
-import { ref, computed, onUnmounted, watch } from 'vue'
+import { ref, computed, onUnmounted, watch, onMounted } from 'vue'
 
 // 环境变量
 const appKey = import.meta.env.VITE_YOUDAO_APP_KEY;
@@ -95,6 +118,9 @@ const emit = defineEmits<{
 // 响应式数据
 const fromLang = ref('zh-CHS');
 const toLang = ref('en');
+const selectedAudioSource = ref('microphone'); // 默认选择麦克风
+const selectedAudioElement = ref('');
+const audioElements = ref<Array<{ id: string; name: string; element: HTMLMediaElement }>>([]);
 const isRecording = ref(false);
 const connectionStatus = ref('未连接');
 const error = ref('');
@@ -106,6 +132,8 @@ const translationResults = ref<Array<{ text: string; timestamp: number }>>([]);
 let ws: WebSocket | null = null;
 let audioContext: any = null;
 let processor: any = null;
+let stream: any = null;
+let audioDestination: any = null;
 
 // 计算属性
 const hasValidConfig = computed(() => {
@@ -162,6 +190,37 @@ const toggleTranslator = () => {
   emit('update:showTranslator', !props.showTranslator);
 };
 
+// 查找页面中的音频元素
+const findAudioElements = () => {
+  const elements: Array<{ id: string; name: string; element: HTMLMediaElement }> = [];
+  
+  // 查找所有 audio 和 video 元素
+  const mediaElements = document.querySelectorAll('audio, video');
+  
+  mediaElements.forEach((element, index) => {
+    const mediaElement = element as HTMLMediaElement;
+    const id = element.id || `media-${index}`;
+    const name = element.getAttribute('title') || 
+                 element.getAttribute('alt') || 
+                 element.src || 
+                 `音频/视频 ${index + 1}`;
+    
+    elements.push({
+      id,
+      name,
+      element: mediaElement
+    });
+  });
+  
+  return elements;
+};
+
+// 刷新音频元素列表
+const refreshAudioElements = () => {
+  audioElements.value = findAudioElements();
+  console.log('找到的音频元素:', audioElements.value);
+};
+
 // SHA256
 const sha256 = async (str: string): Promise<string> => {
   const encoder = new TextEncoder()
@@ -191,35 +250,155 @@ const generateUUID = (): string => {
   });
 };
 
+// 获取页面音频流
+const getPageAudioStream = async () => {
+  try {
+    // 创建音频上下文
+    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+      sampleRate: 16000,
+    });
+    
+    // 创建音频目标节点
+    audioDestination = audioContext.createMediaStreamDestination();
+    
+    if (selectedAudioElement.value) {
+      // 如果选择了特定元素
+      const selectedElement = audioElements.value.find(el => el.id === selectedAudioElement.value);
+      if (selectedElement) {
+        const source = audioContext.createMediaElementSource(selectedElement.element);
+        source.connect(audioDestination);
+        source.connect(audioContext.destination); // 保持原有播放
+        console.log('连接到特定音频元素:', selectedElement.name);
+      }
+    } else {
+      // 自动检测所有音频元素
+      const mediaElements = document.querySelectorAll('audio, video');
+      let connectedCount = 0;
+      
+      mediaElements.forEach((element) => {
+        const mediaElement = element as HTMLMediaElement;
+        try {
+          const source = audioContext.createMediaElementSource(mediaElement);
+          source.connect(audioDestination);
+          source.connect(audioContext.destination); // 保持原有播放
+          connectedCount++;
+          console.log('连接到音频元素:', element.tagName, element.src || element.currentSrc);
+        } catch (error) {
+          console.warn('无法连接到音频元素:', element, error);
+        }
+      });
+      
+      if (connectedCount === 0) {
+        throw new Error('未找到可用的音频元素，请确保页面中有正在播放的音频或视频');
+      }
+      
+      console.log(`成功连接到 ${connectedCount} 个音频元素`);
+    }
+    
+    return audioDestination.stream;
+  } catch (error) {
+    console.error('获取页面音频流失败:', error);
+    throw error;
+  }
+};
+
+// 获取音频流
+const getAudioStream = async () => {
+  try {
+    console.log('尝试获取音频流，音频源:', selectedAudioSource.value);
+    
+    switch (selectedAudioSource.value) {
+      case 'microphone':
+        // 麦克风输入
+        console.log('获取麦克风音频流...');
+        const micStream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            sampleRate: 16000,
+            channelCount: 1,
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          } 
+        });
+        console.log('麦克风音频流获取成功');
+        return micStream;
+      
+      case 'page-audio':
+        // 页面音频
+        console.log('获取页面音频流...');
+        const pageStream = await getPageAudioStream();
+        console.log('页面音频流获取成功');
+        return pageStream;
+      
+      default:
+        throw new Error('不支持的音频源');
+    }
+  } catch (error) {
+    console.error('获取音频流失败:', error);
+    
+    // 提供更友好的错误信息
+    if (error instanceof Error) {
+      if (error.name === 'NotSupportedError') {
+        throw new Error('浏览器不支持此音频源，请尝试使用麦克风');
+      } else if (error.name === 'NotAllowedError') {
+        throw new Error('用户拒绝了音频权限，请允许浏览器访问音频设备');
+      } else if (error.name === 'NotFoundError') {
+        throw new Error('未找到音频设备，请检查设备连接');
+      } else {
+        throw new Error(`获取音频流失败: ${error.message}`);
+      }
+    } else {
+      throw new Error('获取音频流时发生未知错误');
+    }
+  }
+};
+
 // 开始录音
 const startRecording = async () => {
   if (!hasValidConfig.value) {
     error.value = '请配置有道智云API密钥'
     return
   }
+  
   try {
     error.value = ''
     connectionStatus.value = '连接中...'
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    // 获取音频流
+    stream = await getAudioStream();
+    console.log('音频源:', selectedAudioSource.value, '音频流:', stream);
 
-    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-      sampleRate: 16000,
-    })
-    const source = audioContext.createMediaStreamSource(stream)
+    // 如果还没有创建音频上下文，创建一个
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+        sampleRate: 16000,
+      });
+    }
 
-    processor = audioContext.createScriptProcessor(4096, 1, 1)
+    // 创建音频源
+    const source = audioContext.createMediaStreamSource(stream);
+
+    // 使用较小的缓冲区大小，确保实时性
+    processor = audioContext.createScriptProcessor(2048, 1, 1);
 
     processor.onaudioprocess = (e: any) => {
       if (ws && ws.readyState === WebSocket.OPEN) {
         const inputData = e.inputBuffer.getChannelData(0)
         const audioData = new Int16Array(inputData.length)
 
+        // 转换音频数据为16位PCM格式
         for (let i = 0; i < inputData.length; i++) {
-          audioData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768))
+          // 将浮点数转换为16位整数，确保范围在-32768到32767之间
+          const sample = Math.max(-1, Math.min(1, inputData[i]));
+          audioData[i] = Math.round(sample * 32767);
         }
 
-        ws.send(audioData.buffer)
+        // 检查音频数据是否有效（有声音）
+        const hasAudio = audioData.some(sample => Math.abs(sample) > 100);
+        if (hasAudio) {
+          console.log('发送音频数据，长度:', audioData.length);
+          ws.send(audioData.buffer)
+        }
       }
     }
 
@@ -233,6 +412,7 @@ const startRecording = async () => {
   } catch (err) {
     error.value = `录音失败: ${err instanceof Error ? err.message : String(err)}`
     connectionStatus.value = '连接失败'
+    console.error('录音失败:', err);
   }
 }
 
@@ -262,10 +442,13 @@ const connectWebSocket = async (): Promise<void> => {
 
     const wsUrl = `wss://openapi.youdao.com/stream_speech_trans?${params.toString()}`
 
+    console.log('WebSocket连接URL:', wsUrl);
+
     ws = new WebSocket(wsUrl)
 
     ws.onopen = () => {
       connectionStatus.value = '已连接'
+      console.log('WebSocket连接成功');
       resolve()
     }
 
@@ -273,8 +456,11 @@ const connectWebSocket = async (): Promise<void> => {
       if (typeof event.data === 'string') {
         try {
           const data = JSON.parse(event.data)
+          console.log('收到WebSocket消息:', data);
+          
           if (data.action === 'started' && data.errorCode === '0') {
             connectionStatus.value = '开始识别...'
+            console.log('开始识别成功');
           } else if (data.action === 'recognition') {
             if (data.result) {
               const result = data.result
@@ -283,17 +469,21 @@ const connectWebSocket = async (): Promise<void> => {
                   text: result.context,
                   timestamp: Date.now(),
                 })
+                console.log('识别结果:', result.context);
               }
               if (result.tranContent) {
                 translationResults.value.push({
                   text: result.tranContent,
                   timestamp: Date.now(),
                 })
+                console.log('翻译结果:', result.tranContent);
               }
             }
           } else if (data.action === 'error') {
-            error.value = `识别错误: ${data.errorCode}`
+            const errorMsg = getErrorMessage(data.errorCode);
+            error.value = `识别错误: ${data.errorCode} - ${errorMsg}`
             connectionStatus.value = '连接错误'
+            console.error('识别错误:', data);
           }
         } catch (err) {
           console.error('解析消息失败:', err)
@@ -304,14 +494,74 @@ const connectWebSocket = async (): Promise<void> => {
     ws.onerror = (event) => {
       error.value = 'WebSocket连接错误'
       connectionStatus.value = '连接错误'
+      console.error('WebSocket错误:', event);
       reject(new Error('WebSocket连接失败'))
     }
 
     ws.onclose = () => {
       connectionStatus.value = '连接已关闭'
+      console.log('WebSocket连接已关闭');
     }
   })
 }
+
+// 获取错误信息
+const getErrorMessage = (errorCode: string): string => {
+  const errorMessages: { [key: string]: string } = {
+    '108': '音频格式错误，请检查音频参数设置',
+    '101': '缺少必要参数',
+    '102': '签名错误',
+    '103': '访问频率受限',
+    '104': '账户余额不足',
+    '105': 'qps超限',
+    '106': '长连接达到上限',
+    '107': '参数错误',
+    '109': '音频数据错误',
+    '110': '音频数据过大',
+    '111': '音频数据过小',
+    '112': '音频数据为空',
+    '113': '音频数据格式不支持',
+    '114': '音频数据采样率不支持',
+    '115': '音频数据声道数不支持',
+    '116': '音频数据位深度不支持',
+    '117': '音频数据编码格式不支持',
+    '118': '音频数据压缩格式不支持',
+    '119': '音频数据加密格式不支持',
+    '120': '音频数据签名错误',
+    '121': '音频数据时间戳错误',
+    '122': '音频数据序列号错误',
+    '123': '音频数据校验和错误',
+    '124': '音频数据长度错误',
+    '125': '音频数据偏移量错误',
+    '126': '音频数据块大小错误',
+    '127': '音频数据块数量错误',
+    '128': '音频数据块索引错误',
+    '129': '音频数据块数据错误',
+    '130': '音频数据块校验错误',
+    '131': '音频数据块压缩错误',
+    '132': '音频数据块加密错误',
+    '133': '音频数据块签名错误',
+    '134': '音频数据块时间戳错误',
+    '135': '音频数据块序列号错误',
+    '136': '音频数据块校验和错误',
+    '137': '音频数据块长度错误',
+    '138': '音频数据块偏移量错误',
+    '139': '音频数据块大小错误',
+    '140': '音频数据块数量错误',
+    '141': '音频数据块索引错误',
+    '142': '音频数据块数据错误',
+    '143': '音频数据块校验错误',
+    '144': '音频数据块压缩错误',
+    '145': '音频数据块加密错误',
+    '146': '音频数据块签名错误',
+    '147': '音频数据块时间戳错误',
+    '148': '音频数据块序列号错误',
+    '149': '音频数据块校验和错误',
+    '150': '音频数据块长度错误'
+  };
+  
+  return errorMessages[errorCode] || '未知错误';
+};
 
 // 停止录音
 const stopRecording = () => {
@@ -328,6 +578,14 @@ const stopRecording = () => {
   if (audioContext) {
     audioContext.close()
     audioContext = null
+  }
+
+  // 停止音频流
+  if (stream) {
+    stream.getTracks().forEach((track: any) => {
+      track.stop();
+    });
+    stream = null;
   }
 
   isRecording.value = false
@@ -353,6 +611,18 @@ watch(subtitleResults, (newResults, oldResults) => {
     addNewSubtitle();
   }
 }, { deep: true });
+
+// 监听音频源变化
+watch(selectedAudioSource, (newSource) => {
+  if (newSource === 'page-audio') {
+    refreshAudioElements();
+  }
+});
+
+// 组件挂载时初始化
+onMounted(() => {
+  refreshAudioElements();
+});
 
 // 组件卸载时清理资源
 onUnmounted(() => {
@@ -419,6 +689,56 @@ onUnmounted(() => {
 
 .translator-content {
   padding: 16px;
+}
+
+/* 音频源选择样式 */
+.audio-source-controls {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-audio-controls {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.source-label {
+  font-size: 13px;
+  color: #666;
+  white-space: nowrap;
+}
+
+.source-select {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  color: #333;
+}
+
+.source-select:disabled {
+  background: #f5f5f5;
+  color: #999;
+}
+
+.btn-refresh {
+  padding: 6px 8px;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn-refresh:hover:not(:disabled) {
+  background: #545b62;
 }
 
 .language-controls {
@@ -499,67 +819,6 @@ onUnmounted(() => {
 .status-indicator.active {
   background: #d4edda;
   color: #155724;
-}
-
-.results-container {
-  display: flex;
-  gap: 12px;
-}
-
-.result-section {
-  flex: 1;
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 10px;
-}
-
-.result-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #495057;
-  margin-bottom: 8px;
-}
-
-.result-content {
-  min-height: 60px;
-  max-height: 120px;
-  overflow-y: auto;
-}
-
-.empty-state {
-  text-align: center;
-  color: #adb5bd;
-  font-size: 13px;
-  padding: 20px 0;
-}
-
-.result-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.result-item {
-  background: #fff;
-  border-radius: 6px;
-  padding: 8px;
-  font-size: 13px;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 8px;
-}
-
-.result-text {
-  flex: 1;
-  word-break: break-all;
-  line-height: 1.4;
-}
-
-.result-time {
-  font-size: 11px;
-  color: #adb5bd;
-  white-space: nowrap;
 }
 
 .error-message {
