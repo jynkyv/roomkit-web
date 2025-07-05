@@ -47,8 +47,26 @@ class TUIKitI18n {
   }
 
   private t(key: any, option?: Record<string, any>) {
-    const message = this.messages[locale.value];
+    const currentLocale = locale.value || 'zh-CN';
+    const message = this.messages[currentLocale];
+    
+    // 如果当前语言的消息不存在，使用中文作为后备
+    if (!message) {
+      console.warn(`Translation messages for locale '${currentLocale}' not found, falling back to 'zh-CN'`);
+      const fallbackMessage = this.messages['zh-CN'];
+      if (!fallbackMessage || !fallbackMessage[key]) {
+        console.warn(`Translation key '${key}' not found in any locale`);
+        return key;
+      }
+      if (typeof fallbackMessage[key] === 'function') {
+        const named = this.getNamed(option || {});
+        return fallbackMessage[key]({ named });
+      }
+      return fallbackMessage[key];
+    }
+    
     if (!message[key]) {
+      console.warn(`Translation key '${key}' not found in locale '${currentLocale}'`);
       return key;
     }
     if (typeof message[key] === 'function') {
