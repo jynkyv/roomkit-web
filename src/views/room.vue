@@ -20,7 +20,7 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
-import { ConferenceMainView, conference, RoomEvent, LanguageOption, ThemeOption } from '@tencentcloud/roomkit-web-vue3';
+import { ConferenceMainView, conference, RoomEvent, LanguageOption, ThemeOption } from '../components/TUIRoom/index.ts';
 import { onBeforeRouteLeave, useRoute } from 'vue-router';
 import router from '../router/index';
 import i18n, { useI18n } from '../locales/index';
