@@ -4,7 +4,7 @@
       <div class="schedule-room-info" @click="showDetail">
         <div class="schedule-title" :title="item.basicRoomInfo.roomName">
           <span class="schedule-title-text">
-            {{ item.basicRoomInfo.roomName }}
+            {{ item.basicRoomInfo.ownerName + t('quick conference') }}
           </span>
           <IconChevronRight
             class="schedule-title-icon"
