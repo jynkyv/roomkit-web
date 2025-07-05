@@ -48,7 +48,6 @@ export const useAuthStore = defineStore('auth', () => {
       throw new Error('生成腾讯云会议用户信息失败')
     }
   }
-
   // 初始化认证状态
   const initAuth = async () => {
     try {
