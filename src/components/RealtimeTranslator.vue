@@ -16,7 +16,7 @@
 
     <div class="translator-content">
       <!-- 语言控制 -->
-      <div v-if="!isRecording" class="language-controls">
+      <div class="language-controls">
         <div class="section-title">翻译设置</div>
         <div class="lang-selector">
           <select v-model="fromLang" class="lang-select" :disabled="isInitiating">
@@ -35,7 +35,7 @@
       </div>
 
       <!-- 用户选择器 -->
-      <div v-if="!isRecording" class="user-selection">
+      <div class="user-selection">
         <div class="section-title">选择翻译目标</div>
         <UserSelector 
           v-model:showSelector="showUserSelector"
@@ -44,17 +44,6 @@
           :fromLang="fromLang"
           :toLang="toLang"
         />
-      </div>
-
-      <!-- 控制按钮 -->
-      <div class="action-buttons">
-        <button
-          v-if="isRecording"
-          @click="stopRecording"
-          class="btn btn-stop"
-        >
-          停止翻译
-        </button>
       </div>
     </div>
 
@@ -110,6 +99,9 @@ const isWebSocketConnected = ref(false);
 const recognitionResults = ref<Array<{ text: string; timestamp: number }>>([]);
 const translationResults = ref<Array<{ text: string; timestamp: number }>>([]);
 
+// 专门用于WebSocket翻译结果的数组
+const websocketTranslationResults = ref<Array<{ original: string; translation: string; timestamp: number }>>([]);
+
 // WebSocket相关
 let ws: WebSocket | null = null;
 let audioContext: any = null;
@@ -125,26 +117,14 @@ const canStart = computed(() => {
   return hasValidConfig.value && currentTargetUser.value;
 });
 
-// 字幕结果计算属性
+// 字幕结果计算属性 - 只显示WebSocket接收到的翻译结果
 const subtitleResults = computed(() => {
-  const results: Array<{ original: string; translation: string; id: number; timestamp: number }> = [];
-  const maxLength = Math.max(recognitionResults.value.length, translationResults.value.length);
-  
-  for (let i = 0; i < maxLength; i++) {
-    const original = recognitionResults.value[i]?.text || '';
-    const translation = translationResults.value[i]?.text || '';
-    if (original || translation) {
-      results.push({ 
-        original, 
-        translation, 
-        id: i,
-        timestamp: recognitionResults.value[i]?.timestamp || translationResults.value[i]?.timestamp || Date.now()
-      });
-    }
-  }
-  
-  // 只显示最新的3条字幕
-  return results.slice(-3);
+  return websocketTranslationResults.value.map((result, index) => ({
+    original: result.original,
+    translation: result.translation,
+    id: index,
+    timestamp: result.timestamp
+  }));
 });
 
 // 字幕显示状态
@@ -228,7 +208,7 @@ const handleTranslationStarted = (userId: string, userName: string) => {
 // 处理翻译停止
 const handleTranslationStopped = (userId: string) => {
   if (currentTargetUser.value?.id === userId) {
-    stopRecording();
+    stopYoudaoTranslation();
     currentTargetUser.value = null;
     isInitiating.value = false;
   }
@@ -395,18 +375,12 @@ const connectWebSocket = async (): Promise<void> => {
           } else if (data.action === 'recognition') {
             if (data.result) {
               const result = data.result
+              // 处理识别结果
               if (result.context) {
-                recognitionResults.value.push({
-                  text: result.context,
-                  timestamp: Date.now(),
-                })
                 console.log('识别结果:', result.context);
               }
+              // 处理翻译结果
               if (result.tranContent) {
-                translationResults.value.push({
-                  text: result.tranContent,
-                  timestamp: Date.now(),
-                })
                 console.log('翻译结果:', result.tranContent);
                 
                 // 发送翻译结果给发起翻译的用户
@@ -420,12 +394,12 @@ const connectWebSocket = async (): Promise<void> => {
                   });
                 }
               }
+            } else if (data.action === 'error') {
+              const errorMsg = getErrorMessage(data.errorCode);
+              error.value = `识别错误: ${data.errorCode} - ${errorMsg}`
+              connectionStatus.value = '连接错误'
+              console.error('识别错误:', data);
             }
-          } else if (data.action === 'error') {
-            const errorMsg = getErrorMessage(data.errorCode);
-            error.value = `识别错误: ${data.errorCode} - ${errorMsg}`
-            connectionStatus.value = '连接错误'
-            console.error('识别错误:', data);
           }
         } catch (err) {
           console.error('解析消息失败:', err)
@@ -536,6 +510,37 @@ const stopRecording = () => {
   isInitiating.value = false;
 }
 
+// 停止有道翻译（只停止有道API，不关闭WebSocket）
+const stopYoudaoTranslation = () => {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ end: 'true' }))
+    ws.close()
+  }
+
+  if (processor) {
+    processor.disconnect()
+    processor = null
+  }
+
+  if (audioContext) {
+    audioContext.close()
+    audioContext = null
+  }
+
+  // 停止音频流
+  if (stream) {
+    stream.getTracks().forEach((track: any) => {
+      track.stop();
+    });
+    stream = null;
+  }
+
+  isRecording.value = false
+  connectionStatus.value = '已停止'
+  currentTargetUser.value = null;
+  isInitiating.value = false;
+}
+
 // 格式化时间
 const formatTime = (timestamp: number): string => {
   const date = new Date(timestamp)
@@ -553,14 +558,12 @@ watch(subtitleResults, (newResults, oldResults) => {
 const handleTranslationResult = (data: any) => {
   if (data.fromUserId !== translationWebSocketService.getCurrentUserId()) {
     // 收到其他用户的翻译结果
-    recognitionResults.value.push({
-      text: data.data.original,
+    websocketTranslationResults.value.push({
+      original: data.data.original,
+      translation: data.data.translation,
       timestamp: data.data.timestamp,
     });
-    translationResults.value.push({
-      text: data.data.translation,
-      timestamp: data.data.timestamp,
-    });
+    console.log('收到WebSocket翻译结果:', data.data);
   }
 };
 
@@ -593,7 +596,7 @@ const handleStartTranslation = (data: any) => {
 const handleStopTranslation = (data: any) => {
   if (data.toUserId === translationWebSocketService.getCurrentUserId()) {
     console.log('收到停止翻译指令');
-    stopRecording();
+    stopYoudaoTranslation();
   }
 };
 
@@ -648,13 +651,12 @@ const showSubtitle = (original: string, translation: string) => {
 
 // 监听翻译结果，显示字幕
 watch(
-  [recognitionResults, translationResults],
-  ([recog, trans]) => {
-    if (recog.length > 0 || trans.length > 0) {
-      const lastRecog = recog[recog.length - 1]?.text || '';
-      const lastTrans = trans[trans.length - 1]?.text || '';
-      if (lastRecog || lastTrans) {
-        showSubtitle(lastRecog, lastTrans);
+  websocketTranslationResults,
+  (results) => {
+    if (results.length > 0) {
+      const lastResult = results[results.length - 1];
+      if (lastResult.original || lastResult.translation) {
+        showSubtitle(lastResult.original, lastResult.translation);
       }
     }
   },
