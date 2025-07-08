@@ -1,3 +1,5 @@
+import { getWebSocketUrl } from '../config/websocket';
+
 // 翻译WebSocket服务
 export interface TranslationUser {
   id: string;
@@ -43,8 +45,9 @@ class TranslationWebSocketService {
 
     return new Promise((resolve, reject) => {
       try {
-        // 这里使用本地WebSocket服务器地址，你需要启动一个本地WebSocket服务器
-        const wsUrl = 'ws://localhost:8080/translation';
+        // 使用配置文件获取WebSocket地址
+        const wsUrl = getWebSocketUrl();
+        
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {

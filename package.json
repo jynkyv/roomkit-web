@@ -2,10 +2,11 @@
   "name": "@tencentcloud/room-uikit-vue",
   "version": "3.1.0",
   "scripts": {
-    "dev": "vite --force",
+    "dev": "vite",
     "dev:deep": "vite --force",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "vue-tsc && vite build",
+    "preview": "vite preview",
+    "server": "node server/translationServer.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.50.3",
