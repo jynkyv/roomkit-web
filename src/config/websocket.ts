@@ -4,9 +4,9 @@ export const WEBSOCKET_CONFIG = {
   development: {
     url: 'ws://localhost:8080/translation'
   },
-  // 生产环境 - 部署后需要更新为实际的Railway URL
+  // 生产环境 - Railway部署的WebSocket服务器
   production: {
-    url: 'wss://your-railway-app.railway.app/translation'
+    url: 'wss://roomkit-web-production.up.railway.app/translation'
   }
 };
 
