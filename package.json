@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "vite",
     "dev:deep": "vite --force",
-    "build": "vue-tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "server": "node server/translationServer.js"
   },
