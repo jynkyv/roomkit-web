@@ -49,6 +49,7 @@ export default {
   'Stop translation': '停止翻译',
   // 实时翻译器翻译
   'Translation': '翻译',
+  'Connected': '已连接',
   'Disconnected': '未连接',
   'Translation settings': '翻译设置',
   'Chinese': '中文',
