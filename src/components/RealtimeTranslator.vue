@@ -4,11 +4,11 @@
     <div class="translator-header">
       <div class="translator-title">
         <span class="translator-icon">🌐</span>
-        <span>翻译</span>
+        <span>{{ t('Translation') }}</span>
       </div>
       <div class="header-right">
         <span class="connection-status" :class="{ connected: isWebSocketConnected }">
-          {{ isWebSocketConnected ? '已连接' : '未连接' }}
+          {{ isWebSocketConnected ? t('Connected') : t('Disconnected') }}
         </span>
         <button class="close-btn" @click="toggleTranslator">×</button>
       </div>
@@ -17,26 +17,25 @@
     <div class="translator-content">
       <!-- 语言控制 -->
       <div class="language-controls">
-        <div class="section-title">翻译设置</div>
+        <div class="section-title">{{ t('Translation settings') }}</div>
         <div class="lang-selector">
           <select v-model="fromLang" class="lang-select" :disabled="isInitiating">
-            <option value="zh-CHS">中文</option>
-            <option value="en">英语</option>
-            <option value="ja">日语</option>
-
+            <option value="zh-CHS">{{ t('Chinese') }}</option>
+            <option value="en">{{ t('English') }}</option>
+            <option value="ja">{{ t('Japanese') }}</option>
           </select>
           <span class="arrow">→</span>
           <select v-model="toLang" class="lang-select" :disabled="isInitiating">
-            <option value="en">英语</option>
-            <option value="zh-CHS">中文</option>
-            <option value="ja">日语</option>
+            <option value="en">{{ t('English') }}</option>
+            <option value="zh-CHS">{{ t('Chinese') }}</option>
+            <option value="ja">{{ t('Japanese') }}</option>
           </select>
         </div>
       </div>
 
       <!-- 用户选择器 -->
       <div class="user-selection">
-        <div class="section-title">选择翻译目标</div>
+        <div class="section-title">{{ t('Select translation target') }}</div>
         <UserSelector 
           v-model:showSelector="showUserSelector"
           @translation-started="handleTranslationStarted"
@@ -67,7 +66,8 @@
 // @ts-nocheck
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import UserSelector from './UserSelector.vue'
-import { translationWebSocketService, type TranslationUser } from '@/services/translationWebSocket'
+import { translationWebSocketService, type TranslationUser } from '../services/translationWebSocket'
+import { useI18n } from '../locales'
 
 // 环境变量
 const appKey = import.meta.env.VITE_YOUDAO_APP_KEY;
@@ -85,12 +85,15 @@ const emit = defineEmits<{
   'update:showTranslator': [value: boolean]
 }>()
 
+// 国际化
+const { t } = useI18n();
+
 // 响应式数据
 const fromLang = ref('zh-CHS');
 const toLang = ref('en');
 const isRecording = ref(false);
 const isInitiating = ref(false); // 发起翻译的状态
-const connectionStatus = ref('未连接');
+const connectionStatus = ref(t('Disconnected'));
 const error = ref('');
 const showUserSelector = ref(false);
 const currentTargetUser = ref<TranslationUser | null>(null);
@@ -170,18 +173,18 @@ const initWebSocket = async () => {
   const userInfo = getUserInfo();
   if (!userInfo) {
     console.error('无法获取用户信息，WebSocket连接失败');
-    error.value = '无法获取用户信息';
+    error.value = t('Failed to get user info');
     return;
   }
 
   try {
     await translationWebSocketService.connect(userInfo.userId, userInfo.userName);
     isWebSocketConnected.value = true;
-    connectionStatus.value = '已连接';
+    connectionStatus.value = t('Connected');
     console.log('WebSocket连接成功，用户:', userInfo.userName);
   } catch (error) {
     console.error('WebSocket连接失败:', error);
-    error.value = 'WebSocket连接失败';
+    error.value = t('WebSocket connection failed');
   }
 };
 
@@ -201,7 +204,7 @@ const handleTranslationStarted = (userId: string, userName: string) => {
   isInitiating.value = true;
   
   // 作为发起者，只发送指令，不录音
-  connectionStatus.value = '等待目标用户开始翻译...';
+  connectionStatus.value = t('Waiting for target user to start translation...');
   console.log(`发送翻译指令给用户: ${userName} (${userId})`);
 };
 
@@ -267,13 +270,13 @@ const getMicrophoneStream = async () => {
 // 开始录音（作为被翻译的用户）
 const startRecording = async () => {
   if (!hasValidConfig.value) {
-    error.value = '请配置有道智云API密钥'
+    error.value = t('Please configure Youdao API key')
     return
   }
   
   try {
     error.value = ''
-    connectionStatus.value = '连接中...'
+    connectionStatus.value = t('Recording...')
 
     // 获取麦克风音频流
     stream = await getMicrophoneStream();
@@ -319,10 +322,10 @@ const startRecording = async () => {
     await connectWebSocket()
 
     isRecording.value = true
-    connectionStatus.value = '翻译中...'
+    connectionStatus.value = t('Recording...')
   } catch (err) {
-    error.value = `录音失败: ${err instanceof Error ? err.message : String(err)}`
-    connectionStatus.value = '连接失败'
+    error.value = `${t('Recording failed')}: ${err instanceof Error ? err.message : String(err)}`
+    connectionStatus.value = t('Connection failed')
     console.error('录音失败:', err);
   }
 }
@@ -358,7 +361,7 @@ const connectWebSocket = async (): Promise<void> => {
     ws = new WebSocket(wsUrl)
 
     ws.onopen = () => {
-      connectionStatus.value = '已连接'
+      connectionStatus.value = t('Connected')
       console.log('WebSocket连接成功');
       resolve()
     }
@@ -408,14 +411,14 @@ const connectWebSocket = async (): Promise<void> => {
     }
 
     ws.onerror = (event) => {
-      error.value = 'WebSocket连接错误'
-      connectionStatus.value = '连接错误'
+      error.value = t('Connection error')
+      connectionStatus.value = t('Connection error')
       console.error('WebSocket错误:', event);
       reject(new Error('WebSocket连接失败'))
     }
 
     ws.onclose = () => {
-      connectionStatus.value = '连接已关闭'
+      connectionStatus.value = t('Connection closed')
       console.log('WebSocket连接已关闭');
     }
   })
@@ -476,7 +479,7 @@ const getErrorMessage = (errorCode: string): string => {
     '150': '音频数据块长度错误'
   };
   
-  return errorMessages[errorCode] || '未知错误';
+  return errorMessages[errorCode] || t('Unknown error');
 };
 
 // 停止录音
@@ -505,7 +508,7 @@ const stopRecording = () => {
   }
 
   isRecording.value = false
-  connectionStatus.value = '已停止'
+  connectionStatus.value = t('Connection closed')
   currentTargetUser.value = null;
   isInitiating.value = false;
 }
@@ -536,7 +539,7 @@ const stopYoudaoTranslation = () => {
   }
 
   isRecording.value = false
-  connectionStatus.value = '已停止'
+  connectionStatus.value = t('Connection closed')
   currentTargetUser.value = null;
   isInitiating.value = false;
 }

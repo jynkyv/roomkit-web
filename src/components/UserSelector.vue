@@ -1,15 +1,16 @@
 <template>
   <div class="user-selector">
     <div class="selector-header">
-      <h3>选择要翻译的用户</h3>
+      <h3>{{ t('Select user to translate') }}</h3>
       <button class="refresh-btn" @click="refreshUsers" :disabled="isLoading">
-        {{ isLoading ? '刷新中...' : '刷新' }}
+        {{ isLoading ? t('Refreshing...') : t('Refresh') }}
       </button>
     </div>
 
     <div class="user-list">
       <div v-if="users.length === 0" class="no-users">
-        <p>暂无其他在线用户</p>
+        <p>{{ t('No online users') }}</p>
+        <p class="no-users-tip">{{ t('No users tip') }}</p>
       </div>
       
       <div 
@@ -30,7 +31,7 @@
             <div class="user-name">{{ user.name }}</div>
             <div class="user-status">
               <span class="status-dot" :class="{ online: user.isOnline }"></span>
-              {{ user.isOnline ? '在线' : '离线' }}
+              {{ user.isOnline ? t('Online') : t('Offline') }}
             </div>
           </div>
         </div>
@@ -42,14 +43,14 @@
             class="btn-translate"
             :disabled="!user.isOnline"
           >
-            开始翻译
+            {{ t('Start translation') }}
           </button>
           <button 
             v-else
             @click.stop="stopTranslation(user.id)"
             class="btn-stop"
           >
-            停止翻译
+            {{ t('Stop translation') }}
           </button>
         </div>
       </div>
@@ -59,7 +60,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
-import { translationWebSocketService, type TranslationUser } from '@/services/translationWebSocket';
+import { translationWebSocketService, type TranslationUser } from '../services/translationWebSocket';
+import { useI18n } from '../locales';
 
 // Props
 interface Props {
@@ -77,6 +79,9 @@ const emit = defineEmits<{
   'translation-stopped': [userId: string];
 }>();
 
+// 国际化
+const { t } = useI18n();
+
 // 响应式数据
 const users = ref<TranslationUser[]>([]);
 const selectedUserId = ref<string>('');
@@ -86,8 +91,16 @@ const isLoading = ref(false);
 // 获取用户列表
 const refreshUsers = () => {
   isLoading.value = true;
-  users.value = translationWebSocketService.getUsers();
-  isLoading.value = false;
+  console.log('开始刷新用户列表...');
+  
+  // 调用WebSocket服务的刷新方法
+  translationWebSocketService.refreshUserList();
+  
+  // 延迟一下再设置loading为false，给服务器一些响应时间
+  setTimeout(() => {
+    isLoading.value = false;
+    console.log('刷新用户列表完成');
+  }, 1000);
 };
 
 // 选择用户
@@ -218,6 +231,13 @@ onUnmounted(() => {
   text-align: center;
   padding: 20px;
   color: #6c757d;
+}
+
+.no-users-tip {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #868e96;
+  line-height: 1.4;
 }
 
 .user-item {
