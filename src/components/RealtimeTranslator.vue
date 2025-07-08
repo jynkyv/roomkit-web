@@ -12,7 +12,6 @@
     <div class="translator-content">
       <!-- 用户选择器 -->
       <div v-if="!isRecording" class="user-selection">
-        <div class="section-title">选择翻译目标</div>
         <UserSelector 
           v-model:showSelector="showUserSelector"
           @translation-started="handleTranslationStarted"
@@ -76,20 +75,12 @@
   </div>
 
   <!-- 双语字幕显示 -->
-  <div class="subtitle-container" v-if="showTranslator && (recognitionResults.length > 0 || translationResults.length > 0)">
+  <div class="subtitle-container" v-if="showTranslator && currentSubtitle">
     <div class="subtitle-content">
-      <transition-group name="subtitle-fade" tag="div">
-        <div 
-          v-for="(result, index) in subtitleResults" 
-          :key="result.id" 
-          class="subtitle-item"
-          :class="{ 'fade-out': !visibleSubtitles.has(result.id) }"
-          v-show="visibleSubtitles.has(result.id)"
-        >
-          <div class="subtitle-original">{{ result.original }}</div>
-          <div class="subtitle-translation">{{ result.translation }}</div>
-        </div>
-      </transition-group>
+      <div class="subtitle-item" :key="currentSubtitle.id">
+        <div class="subtitle-original">{{ currentSubtitle.original }}</div>
+        <div class="subtitle-translation">{{ currentSubtitle.translation }}</div>
+      </div>
     </div>
   </div>
 </template>
@@ -638,6 +629,43 @@ onUnmounted(() => {
   // 断开WebSocket连接
   translationWebSocketService.disconnect();
 });
+
+const currentSubtitle = ref<{ original: string; translation: string; id: number; timestamp: number } | null>(null);
+const subtitleTimeout = ref<number | null>(null);
+
+// 新字幕到来时显示并自动淡出
+const showSubtitle = (original: string, translation: string) => {
+  if (subtitleTimeout.value) {
+    clearTimeout(subtitleTimeout.value);
+    subtitleTimeout.value = null;
+  }
+  currentSubtitle.value = {
+    original,
+    translation,
+    id: Date.now(),
+    timestamp: Date.now(),
+  };
+  // 5秒后自动隐藏
+  subtitleTimeout.value = window.setTimeout(() => {
+    currentSubtitle.value = null;
+    subtitleTimeout.value = null;
+  }, 5000);
+};
+
+// 监听翻译结果，显示字幕
+watch(
+  [recognitionResults, translationResults],
+  ([recog, trans]) => {
+    if (recog.length > 0 || trans.length > 0) {
+      const lastRecog = recog[recog.length - 1]?.text || '';
+      const lastTrans = trans[trans.length - 1]?.text || '';
+      if (lastRecog || lastTrans) {
+        showSubtitle(lastRecog, lastTrans);
+      }
+    }
+  },
+  { deep: true }
+);
 </script>
 
 <style scoped>
