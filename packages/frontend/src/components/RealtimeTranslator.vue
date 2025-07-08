@@ -110,6 +110,14 @@ const activeTranslationSessions = ref<Map<string, {
   toLang: string;
 }>>(new Map());
 
+// 新增：管理我被要求翻译的会话（key为发起者id）
+const activeIncomingSessions = ref<Map<string, {
+  fromUserId: string;
+  fromUserName: string;
+  fromLang: string;
+  toLang: string;
+}>>(new Map());
+
 const recognitionResults = ref<Array<{ text: string; timestamp: number }>>([]);
 const translationResults = ref<Array<{ text: string; timestamp: number }>>([]);
 
@@ -117,6 +125,7 @@ const translationResults = ref<Array<{ text: string; timestamp: number }>>([]);
 const websocketTranslationResults = ref<Array<{ original: string; translation: string; timestamp: number }>>([]);
 
 // WebSocket相关
+// 注意：ws变量只用于有道WebSocket，不要和用户间WebSocket混用！
 let ws: WebSocket | null = null;
 let audioContext: any = null;
 let processor: any = null;
@@ -183,7 +192,7 @@ const getUserInfo = () => {
 const initWebSocket = async () => {
   const userInfo = getUserInfo();
   if (!userInfo) {
-    console.error('无法获取用户信息，WebSocket连接失败');
+    console.error('无法获取用户信息，用户间通信WebSocket连接失败');
     error.value = t('Failed to get user info');
     return;
   }
@@ -192,9 +201,9 @@ const initWebSocket = async () => {
     await translationWebSocketService.connect(userInfo.userId, userInfo.userName);
     isWebSocketConnected.value = true;
     connectionStatus.value = t('Connected');
-    console.log('WebSocket连接成功，用户:', userInfo.userName);
+    console.log('用户间通信WebSocket连接成功，用户:', userInfo.userName);
   } catch (error) {
-    console.error('WebSocket连接失败:', error);
+    console.error('用户间通信WebSocket连接失败:', error);
     error.value = t('WebSocket connection failed');
   }
 };
@@ -240,6 +249,16 @@ const handleTranslationStopped = (userId: string) => {
     currentTargetUser.value = null;
     isInitiating.value = false;
     console.log(`停止对用户 ${session.targetUserName} 的翻译`);
+    
+    // 发送停止翻译指令给目标用户
+    translationWebSocketService.stopTranslation(userId);
+  } else {
+    // 如果不是发起者，说明是用户主动停止，不需要发送停止指令
+    console.log('用户主动停止翻译，不发送停止指令');
+    // 清理本地状态
+    activeTranslationSessions.value.delete(sessionId);
+    currentTargetUser.value = null;
+    isInitiating.value = false;
   }
 };
 
@@ -388,7 +407,7 @@ const connectWebSocket = async (): Promise<void> => {
 
     ws.onopen = () => {
       connectionStatus.value = t('Connected')
-      console.log('WebSocket连接成功');
+      console.log('有道翻译WebSocket连接成功');
       resolve()
     }
 
@@ -412,16 +431,8 @@ const connectWebSocket = async (): Promise<void> => {
               if (result.tranContent) {
                 console.log('翻译结果:', result.tranContent);
                 
-                // 发送翻译结果给发起翻译的用户
-                if (currentTargetUser.value) {
-                  translationWebSocketService.sendTranslationResult(currentTargetUser.value.id, {
-                    original: result.context || '',
-                    translation: result.tranContent,
-                    timestamp: Date.now(),
-                    fromUserId: translationWebSocketService.getCurrentUserId(),
-                    toUserId: currentTargetUser.value.id
-                  });
-                }
+                // 发送翻译结果给所有正在请求我的用户
+                sendTranslationResultsToAll(result.context || '', result.tranContent);
               }
             } else if (data.action === 'error') {
               const errorMsg = getErrorMessage(data.errorCode);
@@ -439,13 +450,14 @@ const connectWebSocket = async (): Promise<void> => {
     ws.onerror = (event) => {
       error.value = t('Connection error')
       connectionStatus.value = t('Connection error')
-      console.error('WebSocket错误:', event);
-      reject(new Error('WebSocket连接失败'))
+      console.error('有道翻译WebSocket错误:', event);
+      reject(new Error('有道翻译WebSocket连接失败'))
     }
 
     ws.onclose = () => {
       connectionStatus.value = t('Connection closed')
-      console.log('WebSocket连接已关闭');
+      console.log('有道翻译WebSocket连接已关闭');
+      ws = null;
     }
   })
 }
@@ -510,9 +522,11 @@ const getErrorMessage = (errorCode: string): string => {
 
 // 停止录音
 const stopRecording = () => {
+  // 只关闭有道翻译的WebSocket连接，不影响用户间通信的WebSocket
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ end: 'true' }))
     ws.close()
+    ws = null;
   }
 
   if (processor) {
@@ -539,11 +553,13 @@ const stopRecording = () => {
   isInitiating.value = false;
 }
 
-// 停止有道翻译（只停止有道API，不关闭WebSocket）
+// 停止有道翻译（只停止有道API，不关闭用户间WebSocket）
 const stopYoudaoTranslation = () => {
+  // 只关闭有道翻译的WebSocket连接，不影响用户间通信的WebSocket
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ end: 'true' }))
     ws.close()
+    ws = null;
   }
 
   if (processor) {
@@ -600,35 +616,18 @@ const handleTranslationResult = (data: any) => {
 const handleStartTranslation = (data: any) => {
   if (data.toUserId === translationWebSocketService.getCurrentUserId()) {
     console.log('收到开始翻译指令，开始录音和翻译');
-    
-    // 创建新的翻译会话
-    const sessionId = `target_${data.fromUserId}`;
-    activeTranslationSessions.value.set(sessionId, {
-      targetUserId: data.fromUserId,
-      targetUserName: '发起用户', // 这里可以从用户列表获取名称
-      isInitiator: false,
+    // 新增一条被要求翻译的会话
+    activeIncomingSessions.value.set(data.fromUserId, {
+      fromUserId: data.fromUserId,
+      fromUserName: data.fromUserName || '发起用户',
       fromLang: data.fromLang || 'zh-CHS',
-      toLang: data.toLang || 'en'
+      toLang: data.toLang || 'en',
     });
-    
-    currentTargetUser.value = {
-      id: data.fromUserId,
-      name: '发起用户',
-      isOnline: true
-    };
-    
     // 设置API专用的语言设置，不修改本地翻译设置
-    if (data.fromLang) {
-      apiFromLang.value = data.fromLang;
-      console.log('设置 apiFromLang:', data.fromLang);
-    }
-    if (data.toLang) {
-      apiToLang.value = data.toLang;
-      console.log('设置 apiToLang:', data.toLang);
-    }
-    
-    // 然后开始录音和翻译
-    startRecording();
+    if (data.fromLang) apiFromLang.value = data.fromLang;
+    if (data.toLang) apiToLang.value = data.toLang;
+    // 如果没有在录音，则启动有道API
+    if (!isRecording.value) startRecording();
   }
 };
 
@@ -636,16 +635,10 @@ const handleStartTranslation = (data: any) => {
 const handleStopTranslation = (data: any) => {
   if (data.toUserId === translationWebSocketService.getCurrentUserId()) {
     console.log('收到停止翻译指令');
-    
-    const sessionId = `target_${data.fromUserId}`;
-    const session = activeTranslationSessions.value.get(sessionId);
-    
-    if (session && !session.isInitiator) {
-      // 只停止作为被翻译者的翻译会话
+    activeIncomingSessions.value.delete(data.fromUserId);
+    // 如果没有任何被要求翻译的会话了，才停止有道API
+    if (activeIncomingSessions.value.size === 0) {
       stopYoudaoTranslation();
-      activeTranslationSessions.value.delete(sessionId);
-      currentTargetUser.value = null;
-      console.log(`停止为用户 ${session.targetUserName} 的翻译`);
     }
   }
 };
@@ -668,13 +661,17 @@ onMounted(async () => {
 
 // 组件卸载时清理资源
 onUnmounted(() => {
-  stopRecording();
+  // 只停止有道翻译，不关闭用户间WebSocket连接
+  if (isRecording.value) {
+    stopYoudaoTranslation();
+  }
+  
   translationWebSocketService.off('translation_result', handleTranslationResult);
   translationWebSocketService.off('start_translation', handleStartTranslation);
   translationWebSocketService.off('stop_translation', handleStopTranslation);
   
-  // 断开WebSocket连接
-  translationWebSocketService.disconnect();
+  // 注意：不要在这里断开用户间WebSocket连接，因为其他组件可能还在使用
+  // translationWebSocketService.disconnect();
 });
 
 const currentSubtitle = ref<{ original: string; translation: string; id: number; timestamp: number } | null>(null);
@@ -712,6 +709,19 @@ watch(
   },
   { deep: true }
 );
+
+// 发送翻译结果给所有正在请求我的用户
+const sendTranslationResultsToAll = (original: string, translation: string) => {
+  for (const [fromUserId, session] of activeIncomingSessions.value.entries()) {
+    translationWebSocketService.sendTranslationResult(fromUserId, {
+      original,
+      translation,
+      timestamp: Date.now(),
+      fromUserId: translationWebSocketService.getCurrentUserId(),
+      toUserId: fromUserId,
+    });
+  }
+};
 </script>
 
 <style scoped>
