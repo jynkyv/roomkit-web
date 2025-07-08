@@ -51,7 +51,7 @@ class TranslationWebSocketService {
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
-          console.log('翻译WebSocket连接成功');
+          console.log('用户间通信WebSocket连接成功');
           this.isConnected = true;
           this.reconnectAttempts = 0;
           
@@ -75,19 +75,19 @@ class TranslationWebSocketService {
         };
 
         this.ws.onerror = (error) => {
-          console.error('WebSocket连接错误:', error);
+          console.error('用户间通信WebSocket连接错误:', error);
           this.isConnected = false;
           reject(error);
         };
 
         this.ws.onclose = () => {
-          console.log('WebSocket连接已关闭');
+          console.log('用户间通信WebSocket连接已关闭');
           this.isConnected = false;
           this.handleReconnect();
         };
 
       } catch (error) {
-        console.error('创建WebSocket连接失败:', error);
+        console.error('创建用户间通信WebSocket连接失败:', error);
         reject(error);
       }
     });
@@ -126,7 +126,7 @@ class TranslationWebSocketService {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
     } else {
-      console.error('WebSocket未连接，无法发送消息');
+      console.error('用户间通信WebSocket未连接，无法发送消息');
     }
   }
 
@@ -206,7 +206,7 @@ class TranslationWebSocketService {
       });
       console.log('发送刷新用户列表请求');
     } else {
-      console.error('WebSocket未连接，无法刷新用户列表');
+      console.error('用户间通信WebSocket未连接，无法刷新用户列表');
     }
   }
 
@@ -224,13 +224,13 @@ class TranslationWebSocketService {
   private handleReconnect(): void {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
-      console.log(`尝试重连... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+      console.log(`尝试重连用户间通信WebSocket... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
       
       setTimeout(() => {
         this.connect(this.currentUserId, this.users.get(this.currentUserId)?.name || 'Unknown');
       }, this.reconnectInterval);
     } else {
-      console.error('WebSocket重连失败，已达到最大重试次数');
+      console.error('用户间通信WebSocket重连失败，已达到最大重试次数');
     }
   }
 
@@ -268,6 +268,7 @@ class TranslationWebSocketService {
   // 断开连接
   disconnect(): void {
     if (this.ws) {
+      console.log('主动断开用户间通信WebSocket连接');
       this.ws.close();
       this.ws = null;
     }
