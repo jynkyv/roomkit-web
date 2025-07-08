@@ -101,6 +101,15 @@ const showUserSelector = ref(false);
 const currentTargetUser = ref<TranslationUser | null>(null);
 const isWebSocketConnected = ref(false);
 
+// 新增：管理翻译会话
+const activeTranslationSessions = ref<Map<string, {
+  targetUserId: string;
+  targetUserName: string;
+  isInitiator: boolean; // true表示我是发起者，false表示我是被翻译者
+  fromLang: string;
+  toLang: string;
+}>>(new Map());
+
 const recognitionResults = ref<Array<{ text: string; timestamp: number }>>([]);
 const translationResults = ref<Array<{ text: string; timestamp: number }>>([]);
 
@@ -197,6 +206,16 @@ const toggleTranslator = () => {
 
 // 处理翻译开始（作为发起者）
 const handleTranslationStarted = (userId: string, userName: string) => {
+  // 创建新的翻译会话
+  const sessionId = `initiator_${userId}`;
+  activeTranslationSessions.value.set(sessionId, {
+    targetUserId: userId,
+    targetUserName: userName,
+    isInitiator: true,
+    fromLang: fromLang.value,
+    toLang: toLang.value
+  });
+  
   currentTargetUser.value = {
     id: userId,
     name: userName,
@@ -210,12 +229,17 @@ const handleTranslationStarted = (userId: string, userName: string) => {
   console.log(`发送翻译指令给用户: ${userName} (${userId})`);
 };
 
-// 处理翻译停止
+// 处理翻译停止（作为发起者停止对目标用户的翻译）
 const handleTranslationStopped = (userId: string) => {
-  if (currentTargetUser.value?.id === userId) {
-    stopYoudaoTranslation();
+  const sessionId = `initiator_${userId}`;
+  const session = activeTranslationSessions.value.get(sessionId);
+  
+  if (session && session.isInitiator) {
+    // 只停止作为发起者的翻译会话
+    activeTranslationSessions.value.delete(sessionId);
     currentTargetUser.value = null;
     isInitiating.value = false;
+    console.log(`停止对用户 ${session.targetUserName} 的翻译`);
   }
 };
 
@@ -576,9 +600,20 @@ const handleTranslationResult = (data: any) => {
 const handleStartTranslation = (data: any) => {
   if (data.toUserId === translationWebSocketService.getCurrentUserId()) {
     console.log('收到开始翻译指令，开始录音和翻译');
+    
+    // 创建新的翻译会话
+    const sessionId = `target_${data.fromUserId}`;
+    activeTranslationSessions.value.set(sessionId, {
+      targetUserId: data.fromUserId,
+      targetUserName: '发起用户', // 这里可以从用户列表获取名称
+      isInitiator: false,
+      fromLang: data.fromLang || 'zh-CHS',
+      toLang: data.toLang || 'en'
+    });
+    
     currentTargetUser.value = {
       id: data.fromUserId,
-      name: '发起用户', // 这里可以从用户列表获取名称
+      name: '发起用户',
       isOnline: true
     };
     
@@ -597,11 +632,21 @@ const handleStartTranslation = (data: any) => {
   }
 };
 
-// 监听停止翻译指令
+// 监听停止翻译指令（作为被翻译的用户停止翻译）
 const handleStopTranslation = (data: any) => {
   if (data.toUserId === translationWebSocketService.getCurrentUserId()) {
     console.log('收到停止翻译指令');
-    stopYoudaoTranslation();
+    
+    const sessionId = `target_${data.fromUserId}`;
+    const session = activeTranslationSessions.value.get(sessionId);
+    
+    if (session && !session.isInitiator) {
+      // 只停止作为被翻译者的翻译会话
+      stopYoudaoTranslation();
+      activeTranslationSessions.value.delete(sessionId);
+      currentTargetUser.value = null;
+      console.log(`停止为用户 ${session.targetUserName} 的翻译`);
+    }
   }
 };
 
