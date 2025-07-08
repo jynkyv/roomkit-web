@@ -96,7 +96,7 @@
 
 <script setup lang="ts">
 // @ts-nocheck
-import { ref, computed, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import UserSelector from './UserSelector.vue'
 import { translationWebSocketService, type TranslationUser } from '@/services/translationWebSocket'
 
@@ -125,6 +125,7 @@ const error = ref('');
 const showUserSelector = ref(false);
 const currentTargetUser = ref<TranslationUser | null>(null);
 const isInitiator = ref(false); // 是否是发起翻译的用户
+const isWebSocketConnected = ref(false);
 
 const recognitionResults = ref<Array<{ text: string; timestamp: number }>>([]);
 const translationResults = ref<Array<{ text: string; timestamp: number }>>([]);
@@ -182,6 +183,45 @@ const addNewSubtitle = () => {
     const latestSubtitle = subtitleResults.value[subtitleResults.value.length - 1];
     visibleSubtitles.value.add(latestSubtitle.id);
     fadeOutSubtitle(latestSubtitle.id);
+  }
+};
+
+// 获取用户信息
+const getUserInfo = () => {
+  try {
+    const userInfoStr = sessionStorage.getItem('tuiRoom-userInfo');
+    if (userInfoStr) {
+      const userInfo = JSON.parse(userInfoStr);
+      return {
+        userId: userInfo.userId,
+        userName: userInfo.userName
+      };
+    }
+  } catch (error) {
+    console.error('获取用户信息失败:', error);
+  }
+  
+  // 如果没有用户信息，返回null
+  return null;
+};
+
+// 初始化WebSocket连接
+const initWebSocket = async () => {
+  const userInfo = getUserInfo();
+  if (!userInfo) {
+    console.error('无法获取用户信息，WebSocket连接失败');
+    error.value = '无法获取用户信息';
+    return;
+  }
+
+  try {
+    await translationWebSocketService.connect(userInfo.userId, userInfo.userName);
+    isWebSocketConnected.value = true;
+    connectionStatus.value = '已连接';
+    console.log('WebSocket连接成功，用户:', userInfo.userName);
+  } catch (error) {
+    console.error('WebSocket连接失败:', error);
+    error.value = 'WebSocket连接失败';
   }
 };
 
@@ -579,16 +619,25 @@ const setupWebSocketListeners = () => {
   translationWebSocketService.on('stop_translation', handleStopTranslation);
 };
 
+// 组件挂载时初始化WebSocket连接
+onMounted(async () => {
+  // 注册事件监听器
+  setupWebSocketListeners();
+  
+  // 初始化WebSocket连接
+  await initWebSocket();
+});
+
 // 组件卸载时清理资源
 onUnmounted(() => {
   stopRecording();
   translationWebSocketService.off('translation_result', handleTranslationResult);
   translationWebSocketService.off('start_translation', handleStartTranslation);
   translationWebSocketService.off('stop_translation', handleStopTranslation);
+  
+  // 断开WebSocket连接
+  translationWebSocketService.disconnect();
 });
-
-// 初始化
-setupWebSocketListeners();
 </script>
 
 <style scoped>

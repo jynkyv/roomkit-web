@@ -11,12 +11,22 @@ const wss = new WebSocket.Server({ server });
 const clients = new Map();
 const users = new Map();
 
+// 心跳相关配置
+const HEARTBEAT_INTERVAL = 10000; // 10秒
+const HEARTBEAT_TIMEOUT = 20000; // 20秒
+
 // WebSocket连接处理
 wss.on('connection', (ws, req) => {
   console.log('新的WebSocket连接');
   
   let currentUserId = null;
   let currentUserName = null;
+  ws.isAlive = true;
+
+  // 心跳pong响应
+  ws.on('pong', () => {
+    ws.isAlive = true;
+  });
 
   ws.on('message', (message) => {
     try {
@@ -114,6 +124,31 @@ wss.on('connection', (ws, req) => {
     console.error('WebSocket错误:', error);
   });
 });
+
+// 心跳检测定时器
+setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (ws.isAlive === false) {
+      // 找到该 ws 对应的 userId
+      let userIdToRemove = null;
+      for (const [userId, clientWs] of clients.entries()) {
+        if (clientWs === ws) {
+          userIdToRemove = userId;
+          break;
+        }
+      }
+      if (userIdToRemove) {
+        clients.delete(userIdToRemove);
+        users.delete(userIdToRemove);
+        broadcastUserList();
+        console.log(`心跳超时，移除用户: ${userIdToRemove}`);
+      }
+      return ws.terminate();
+    }
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, HEARTBEAT_INTERVAL);
 
 // 广播用户列表
 function broadcastUserList() {
