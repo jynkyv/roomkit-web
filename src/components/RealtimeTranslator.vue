@@ -10,29 +10,6 @@
     </div>
 
     <div class="translator-content">
-      <!-- 音频源选择 -->
-      <div class="audio-source-controls">
-        <label class="source-label">音频源:</label>
-        <select v-model="selectedAudioSource" :disabled="isRecording" class="source-select">
-          <option value="microphone">麦克风</option>
-          <option value="page-audio">页面音频</option>
-        </select>
-      </div>
-
-      <!-- 页面音频选择器 -->
-      <div v-if="selectedAudioSource === 'page-audio'" class="page-audio-controls">
-        <label class="source-label">选择音频元素:</label>
-        <select v-model="selectedAudioElement" :disabled="isRecording" class="source-select">
-          <option value="">自动检测所有音频</option>
-          <option v-for="element in audioElements" :key="element.id" :value="element.id">
-            {{ element.name }}
-          </option>
-        </select>
-        <button @click="refreshAudioElements" :disabled="isRecording" class="btn btn-refresh">
-          刷新
-        </button>
-      </div>
-
       <div class="language-controls">
         <select v-model="fromLang" :disabled="isRecording" class="lang-select">
           <option value="zh-CHS">中文</option>
@@ -97,7 +74,7 @@
 
 <script setup lang="ts">
 // @ts-nocheck
-import { ref, computed, onUnmounted, watch, onMounted } from 'vue'
+import { ref, computed, onUnmounted, watch } from 'vue'
 
 // 环境变量
 const appKey = import.meta.env.VITE_YOUDAO_APP_KEY;
@@ -118,9 +95,6 @@ const emit = defineEmits<{
 // 响应式数据
 const fromLang = ref('zh-CHS');
 const toLang = ref('en');
-const selectedAudioSource = ref('microphone'); // 默认选择麦克风
-const selectedAudioElement = ref('');
-const audioElements = ref<Array<{ id: string; name: string; element: HTMLMediaElement }>>([]);
 const isRecording = ref(false);
 const connectionStatus = ref('未连接');
 const error = ref('');
@@ -133,7 +107,6 @@ let ws: WebSocket | null = null;
 let audioContext: any = null;
 let processor: any = null;
 let stream: any = null;
-let audioDestination: any = null;
 
 // 计算属性
 const hasValidConfig = computed(() => {
@@ -190,37 +163,6 @@ const toggleTranslator = () => {
   emit('update:showTranslator', !props.showTranslator);
 };
 
-// 查找页面中的音频元素
-const findAudioElements = () => {
-  const elements: Array<{ id: string; name: string; element: HTMLMediaElement }> = [];
-  
-  // 查找所有 audio 和 video 元素
-  const mediaElements = document.querySelectorAll('audio, video');
-  
-  mediaElements.forEach((element, index) => {
-    const mediaElement = element as HTMLMediaElement;
-    const id = element.id || `media-${index}`;
-    const name = element.getAttribute('title') || 
-                 element.getAttribute('alt') || 
-                 element.src || 
-                 `音频/视频 ${index + 1}`;
-    
-    elements.push({
-      id,
-      name,
-      element: mediaElement
-    });
-  });
-  
-  return elements;
-};
-
-// 刷新音频元素列表
-const refreshAudioElements = () => {
-  audioElements.value = findAudioElements();
-  console.log('找到的音频元素:', audioElements.value);
-};
-
 // SHA256
 const sha256 = async (str: string): Promise<string> => {
   const encoder = new TextEncoder()
@@ -250,106 +192,24 @@ const generateUUID = (): string => {
   });
 };
 
-// 获取页面音频流
-const getPageAudioStream = async () => {
+// 获取麦克风音频流
+const getMicrophoneStream = async () => {
   try {
-    // 创建音频上下文
-    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-      sampleRate: 16000,
+    console.log('获取麦克风音频流...');
+    const micStream = await navigator.mediaDevices.getUserMedia({ 
+      audio: {
+        sampleRate: 16000,
+        channelCount: 1,
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      } 
     });
-    
-    // 创建音频目标节点
-    audioDestination = audioContext.createMediaStreamDestination();
-    
-    if (selectedAudioElement.value) {
-      // 如果选择了特定元素
-      const selectedElement = audioElements.value.find(el => el.id === selectedAudioElement.value);
-      if (selectedElement) {
-        const source = audioContext.createMediaElementSource(selectedElement.element);
-        source.connect(audioDestination);
-        source.connect(audioContext.destination); // 保持原有播放
-        console.log('连接到特定音频元素:', selectedElement.name);
-      }
-    } else {
-      // 自动检测所有音频元素
-      const mediaElements = document.querySelectorAll('audio, video');
-      let connectedCount = 0;
-      
-      mediaElements.forEach((element) => {
-        const mediaElement = element as HTMLMediaElement;
-        try {
-          const source = audioContext.createMediaElementSource(mediaElement);
-          source.connect(audioDestination);
-          source.connect(audioContext.destination); // 保持原有播放
-          connectedCount++;
-          console.log('连接到音频元素:', element.tagName, element.src || element.currentSrc);
-        } catch (error) {
-          console.warn('无法连接到音频元素:', element, error);
-        }
-      });
-      
-      if (connectedCount === 0) {
-        throw new Error('未找到可用的音频元素，请确保页面中有正在播放的音频或视频');
-      }
-      
-      console.log(`成功连接到 ${connectedCount} 个音频元素`);
-    }
-    
-    return audioDestination.stream;
+    console.log('麦克风音频流获取成功');
+    return micStream;
   } catch (error) {
-    console.error('获取页面音频流失败:', error);
+    console.error('获取麦克风音频流失败:', error);
     throw error;
-  }
-};
-
-// 获取音频流
-const getAudioStream = async () => {
-  try {
-    console.log('尝试获取音频流，音频源:', selectedAudioSource.value);
-    
-    switch (selectedAudioSource.value) {
-      case 'microphone':
-        // 麦克风输入
-        console.log('获取麦克风音频流...');
-        const micStream = await navigator.mediaDevices.getUserMedia({ 
-          audio: {
-            sampleRate: 16000,
-            channelCount: 1,
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false
-          } 
-        });
-        console.log('麦克风音频流获取成功');
-        return micStream;
-      
-      case 'page-audio':
-        // 页面音频
-        console.log('获取页面音频流...');
-        const pageStream = await getPageAudioStream();
-        console.log('页面音频流获取成功');
-        return pageStream;
-      
-      default:
-        throw new Error('不支持的音频源');
-    }
-  } catch (error) {
-    console.error('获取音频流失败:', error);
-    
-    // 提供更友好的错误信息
-    if (error instanceof Error) {
-      if (error.name === 'NotSupportedError') {
-        throw new Error('浏览器不支持此音频源，请尝试使用麦克风');
-      } else if (error.name === 'NotAllowedError') {
-        throw new Error('用户拒绝了音频权限，请允许浏览器访问音频设备');
-      } else if (error.name === 'NotFoundError') {
-        throw new Error('未找到音频设备，请检查设备连接');
-      } else {
-        throw new Error(`获取音频流失败: ${error.message}`);
-      }
-    } else {
-      throw new Error('获取音频流时发生未知错误');
-    }
   }
 };
 
@@ -364,9 +224,9 @@ const startRecording = async () => {
     error.value = ''
     connectionStatus.value = '连接中...'
 
-    // 获取音频流
-    stream = await getAudioStream();
-    console.log('音频源:', selectedAudioSource.value, '音频流:', stream);
+    // 获取麦克风音频流
+    stream = await getMicrophoneStream();
+    console.log('音频流:', stream);
 
     // 如果还没有创建音频上下文，创建一个
     if (!audioContext) {
@@ -612,18 +472,6 @@ watch(subtitleResults, (newResults, oldResults) => {
   }
 }, { deep: true });
 
-// 监听音频源变化
-watch(selectedAudioSource, (newSource) => {
-  if (newSource === 'page-audio') {
-    refreshAudioElements();
-  }
-});
-
-// 组件挂载时初始化
-onMounted(() => {
-  refreshAudioElements();
-});
-
 // 组件卸载时清理资源
 onUnmounted(() => {
   stopRecording();
@@ -689,56 +537,6 @@ onUnmounted(() => {
 
 .translator-content {
   padding: 16px;
-}
-
-/* 音频源选择样式 */
-.audio-source-controls {
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.page-audio-controls {
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.source-label {
-  font-size: 13px;
-  color: #666;
-  white-space: nowrap;
-}
-
-.source-select {
-  flex: 1;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 13px;
-  background: #fff;
-  color: #333;
-}
-
-.source-select:disabled {
-  background: #f5f5f5;
-  color: #999;
-}
-
-.btn-refresh {
-  padding: 6px 8px;
-  background: #6c757d;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.btn-refresh:hover:not(:disabled) {
-  background: #545b62;
 }
 
 .language-controls {
