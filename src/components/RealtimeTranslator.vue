@@ -10,41 +10,63 @@
     </div>
 
     <div class="translator-content">
-      <div class="language-controls">
-        <select v-model="fromLang" :disabled="isRecording" class="lang-select">
-          <option value="zh-CHS">中文</option>
-          <option value="en">英语</option>
-          <option value="ja">日语</option>
-          <option value="ko">韩语</option>
-        </select>
-        <span class="arrow">→</span>
-        <select v-model="toLang" :disabled="isRecording" class="lang-select">
-          <option value="en">英语</option>
-          <option value="zh-CHS">中文</option>
-          <option value="ja">日语</option>
-          <option value="ko">韩语</option>
-        </select>
+      <!-- 用户选择器 -->
+      <div v-if="!isRecording" class="user-selection">
+        <div class="section-title">选择翻译目标</div>
+        <UserSelector 
+          v-model:showSelector="showUserSelector"
+          @translation-started="handleTranslationStarted"
+          @translation-stopped="handleTranslationStopped"
+        />
       </div>
 
+      <!-- 语言控制 -->
+      <div v-if="!isRecording" class="language-controls">
+        <div class="section-title">翻译设置</div>
+        <div class="lang-selector">
+          <select v-model="fromLang" class="lang-select">
+            <option value="zh-CHS">中文</option>
+            <option value="en">英语</option>
+            <option value="ja">日语</option>
+            <option value="ko">韩语</option>
+          </select>
+          <span class="arrow">→</span>
+          <select v-model="toLang" class="lang-select">
+            <option value="en">英语</option>
+            <option value="zh-CHS">中文</option>
+            <option value="ja">日语</option>
+            <option value="ko">韩语</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 控制按钮 -->
       <div class="action-buttons">
         <button
-          @click="startRecording"
-          :disabled="isRecording || !canStart"
-          class="btn btn-record"
-          :class="{ recording: isRecording }"
+          v-if="!isRecording"
+          @click="showUserSelector = true"
+          class="btn btn-select-user"
         >
-          {{ isRecording ? '录音中' : '开始翻译' }}
+          选择用户
         </button>
-        <button @click="stopRecording" :disabled="!isRecording" class="btn btn-stop">
-          停止
+        <button
+          v-if="isRecording"
+          @click="stopRecording"
+          class="btn btn-stop"
+        >
+          停止翻译
         </button>
         <button @click="clearResults" :disabled="isRecording" class="btn btn-clear">
-          清空
+          清空结果
         </button>
       </div>
 
+      <!-- 状态指示器 -->
       <div class="status-indicator" :class="{ active: isRecording }">
-        {{ connectionStatus }}
+        <div class="status-text">{{ connectionStatus }}</div>
+        <div v-if="currentTargetUser" class="target-user">
+          翻译目标: {{ currentTargetUser.name }}
+        </div>
       </div>
     </div>
 
@@ -75,6 +97,8 @@
 <script setup lang="ts">
 // @ts-nocheck
 import { ref, computed, onUnmounted, watch } from 'vue'
+import UserSelector from './UserSelector.vue'
+import { translationWebSocketService, type TranslationUser } from '@/services/translationWebSocket'
 
 // 环境变量
 const appKey = import.meta.env.VITE_YOUDAO_APP_KEY;
@@ -98,6 +122,9 @@ const toLang = ref('en');
 const isRecording = ref(false);
 const connectionStatus = ref('未连接');
 const error = ref('');
+const showUserSelector = ref(false);
+const currentTargetUser = ref<TranslationUser | null>(null);
+const isInitiator = ref(false); // 是否是发起翻译的用户
 
 const recognitionResults = ref<Array<{ text: string; timestamp: number }>>([]);
 const translationResults = ref<Array<{ text: string; timestamp: number }>>([]);
@@ -114,7 +141,7 @@ const hasValidConfig = computed(() => {
 });
 
 const canStart = computed(() => {
-  return hasValidConfig.value;
+  return hasValidConfig.value && currentTargetUser.value;
 });
 
 // 字幕结果计算属性
@@ -161,6 +188,30 @@ const addNewSubtitle = () => {
 // 方法
 const toggleTranslator = () => {
   emit('update:showTranslator', !props.showTranslator);
+};
+
+// 处理翻译开始（作为发起者）
+const handleTranslationStarted = (userId: string, userName: string) => {
+  currentTargetUser.value = {
+    id: userId,
+    name: userName,
+    isOnline: true
+  };
+  showUserSelector.value = false;
+  isInitiator.value = true;
+  
+  // 作为发起者，只发送指令，不录音
+  connectionStatus.value = '等待目标用户开始翻译...';
+  console.log(`发送翻译指令给用户: ${userName} (${userId})`);
+};
+
+// 处理翻译停止
+const handleTranslationStopped = (userId: string) => {
+  if (currentTargetUser.value?.id === userId) {
+    stopRecording();
+    currentTargetUser.value = null;
+    isInitiator.value = false;
+  }
 };
 
 // SHA256
@@ -213,7 +264,7 @@ const getMicrophoneStream = async () => {
   }
 };
 
-// 开始录音
+// 开始录音（作为被翻译的用户）
 const startRecording = async () => {
   if (!hasValidConfig.value) {
     error.value = '请配置有道智云API密钥'
@@ -337,6 +388,17 @@ const connectWebSocket = async (): Promise<void> => {
                   timestamp: Date.now(),
                 })
                 console.log('翻译结果:', result.tranContent);
+                
+                // 发送翻译结果给发起翻译的用户
+                if (currentTargetUser.value) {
+                  translationWebSocketService.sendTranslationResult(currentTargetUser.value.id, {
+                    original: result.context || '',
+                    translation: result.tranContent,
+                    timestamp: Date.now(),
+                    fromUserId: translationWebSocketService.getCurrentUserId(),
+                    toUserId: currentTargetUser.value.id
+                  });
+                }
               }
             }
           } else if (data.action === 'error') {
@@ -450,6 +512,8 @@ const stopRecording = () => {
 
   isRecording.value = false
   connectionStatus.value = '已停止'
+  currentTargetUser.value = null;
+  isInitiator.value = false;
 }
 
 // 清空结果
@@ -472,10 +536,59 @@ watch(subtitleResults, (newResults, oldResults) => {
   }
 }, { deep: true });
 
+// 监听WebSocket翻译结果（作为接收者）
+const handleTranslationResult = (data: any) => {
+  if (data.fromUserId !== translationWebSocketService.getCurrentUserId()) {
+    // 收到其他用户的翻译结果
+    recognitionResults.value.push({
+      text: data.data.original,
+      timestamp: data.data.timestamp,
+    });
+    translationResults.value.push({
+      text: data.data.translation,
+      timestamp: data.data.timestamp,
+    });
+  }
+};
+
+// 监听开始翻译指令（作为被翻译的用户）
+const handleStartTranslation = (data: any) => {
+  if (data.toUserId === translationWebSocketService.getCurrentUserId()) {
+    console.log('收到开始翻译指令，开始录音和翻译');
+    currentTargetUser.value = {
+      id: data.fromUserId,
+      name: '发起用户', // 这里可以从用户列表获取名称
+      isOnline: true
+    };
+    startRecording();
+  }
+};
+
+// 监听停止翻译指令
+const handleStopTranslation = (data: any) => {
+  if (data.toUserId === translationWebSocketService.getCurrentUserId()) {
+    console.log('收到停止翻译指令');
+    stopRecording();
+  }
+};
+
+// 组件挂载时注册事件监听器
+const setupWebSocketListeners = () => {
+  translationWebSocketService.on('translation_result', handleTranslationResult);
+  translationWebSocketService.on('start_translation', handleStartTranslation);
+  translationWebSocketService.on('stop_translation', handleStopTranslation);
+};
+
 // 组件卸载时清理资源
 onUnmounted(() => {
   stopRecording();
+  translationWebSocketService.off('translation_result', handleTranslationResult);
+  translationWebSocketService.off('start_translation', handleStartTranslation);
+  translationWebSocketService.off('stop_translation', handleStopTranslation);
 });
+
+// 初始化
+setupWebSocketListeners();
 </script>
 
 <style scoped>
@@ -483,7 +596,7 @@ onUnmounted(() => {
   position: fixed;
   top: 20px;
   right: 20px;
-  width: 320px;
+  width: 380px;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
@@ -539,11 +652,25 @@ onUnmounted(() => {
   padding: 16px;
 }
 
+.section-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #495057;
+  margin-bottom: 8px;
+}
+
+.user-selection {
+  margin-bottom: 16px;
+}
+
 .language-controls {
+  margin-bottom: 16px;
+}
+
+.lang-selector {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
 }
 
 .lang-select {
@@ -583,18 +710,22 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
-.btn-record {
-  background: #28a745;
+.btn-select-user {
+  background: #007bff;
   color: #fff;
 }
 
-.btn-record.recording {
-  background: #dc3545;
+.btn-select-user:hover {
+  background: #0056b3;
 }
 
 .btn-stop {
-  background: #6c757d;
+  background: #dc3545;
   color: #fff;
+}
+
+.btn-stop:hover {
+  background: #c82333;
 }
 
 .btn-clear {
@@ -603,9 +734,13 @@ onUnmounted(() => {
   border: 1px solid #dee2e6;
 }
 
+.btn-clear:hover {
+  background: #e9ecef;
+}
+
 .status-indicator {
   text-align: center;
-  padding: 6px;
+  padding: 8px;
   margin-bottom: 12px;
   border-radius: 6px;
   background: #f8f9fa;
@@ -617,6 +752,16 @@ onUnmounted(() => {
 .status-indicator.active {
   background: #d4edda;
   color: #155724;
+}
+
+.status-text {
+  margin-bottom: 4px;
+}
+
+.target-user {
+  font-size: 12px;
+  color: #28a745;
+  font-weight: 500;
 }
 
 .error-message {
