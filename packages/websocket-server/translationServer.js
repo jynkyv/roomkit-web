@@ -125,6 +125,23 @@ wss.on('connection', (ws, req) => {
           }
           break;
           
+        case 'request_user_list':
+          // 请求用户列表
+          console.log(`用户 ${currentUserId} 请求用户列表`);
+          
+          // 直接发送用户列表给请求的用户
+          const userList = Array.from(users.values());
+          const responseMessage = JSON.stringify({
+            type: 'user_list',
+            users: userList
+          });
+          
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(responseMessage);
+            console.log(`已发送用户列表给用户 ${currentUserId}，共 ${userList.length} 个用户`);
+          }
+          break;
+          
         default:
           console.log('未知消息类型:', data.type);
       }

@@ -198,6 +198,18 @@ class TranslationWebSocketService {
     return Array.from(this.users.values()).filter(user => user.id !== this.currentUserId);
   }
 
+  // 刷新用户列表
+  refreshUserList(): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.sendMessage({
+        type: 'request_user_list'
+      });
+      console.log('发送刷新用户列表请求');
+    } else {
+      console.error('WebSocket未连接，无法刷新用户列表');
+    }
+  }
+
   // 获取当前用户ID
   getCurrentUserId(): string {
     return this.currentUserId;
