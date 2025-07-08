@@ -1,115 +1,124 @@
-# Quick Run of TUIRoomKit Web Demo
+# RoomKit 实时翻译系统
 
-English | [简体中文](README.zh.md)
+一个基于Vue.js和WebSocket的实时翻译系统，支持多语言实时翻译。
 
-This document describes how to quickly run the TUIRoomKit demo project to try out group audio/video interaction. If you need to integrate TUIRoomKit into your existing business, please refer to [TUIRoomKit Integration](https://trtc.io/document/54845?platform=web&product=conference).
-
-> Notice：<br>
-> This example project integrates with the TUIRoomKit npm package [@tencentcloud/roomkit-web-vue3
-](https://www.npmjs.com/package/@tencentcloud/roomkit-web-vue3). This npm package provides a pre-conference preview component, an in-conference component, and methods for starting conference, joining conference, and fine-tuning the interface. For more, see [TUIRoomKit API](https://trtc.io/document/54880?platform=web&product=conference). If these APIs don't meet your business needs, you can refer to [TUIRoomKit source code export](https://trtc.io/document/54851?platform=web&product=conference#method-2.3A-modify-the-uikit-source-code) for accessing the TUIRoomKit source code.
-
-## Directory
+## 项目结构
 
 ```
-.
-├── README.md
-├── README.zh.md
-├── index.html
-├── package.json
-├── public
-│   └── favicon.ico
-├── src
-│   ├── App.vue         -- Sample Project Main Page
-│   ├── config          -- User information configuration file and test userSig generation file
-│   ├── env.d.ts
-│   ├── locales         -- Local language, support English, Chinese
-│   ├── main.ts         -- Sample Project Entry File
-│   ├── router          -- Sample Project Routing Configuration
-│   ├── utils
-│   └── views           -- Sample project pages (including pre-conference preview pages and in-conference page)
-├── tsconfig.json
-├── tsconfig.node.json
-├── useRoomExtension.js
-└── vite.config.ts
+roomkit-project/
+├── packages/
+│   ├── frontend/          # Vue.js前端应用
+│   │   ├── src/          # 源代码
+│   │   ├── public/       # 静态资源
+│   │   └── package.json  # 前端依赖
+│   └── websocket-server/ # WebSocket服务器
+│       ├── translationServer.js  # 服务器主文件
+│       └── package.json  # 服务器依赖
+├── package.json          # 根package.json
+└── pnpm-workspace.yaml  # pnpm工作区配置
 ```
 
-### Step 1. Activate the service
-1. Please refer to the official documentation at [Integration (TUIRoomKit)](https://trtc.io/document/54845) to obtain your own SDKAppID and SDKSecreKey.
+## 快速开始
 
-### Step 2: Download the source code and configure the project
-1. Clone or download the source code in our repository (**You can start the repository to save it**).
-2. Find and open `Web/example/vite-vue3-ts/src/config/basic-info-config.js`.
-3. Configure parameters in `basic-info-config.js`:
+### 安装依赖
 
-	<img src="https://qcloudimg.tencent-cloud.cn/raw/36fc2cb8a3cc8a90a02d1ab0d9e4ffb7.png" width="900">
-	- SDKAPPID: 0 by default. Set it to the `SDKAppID` obtained in step 1.
-	- SDKSECRETKEY: '' by default. Set it to the key obtained in step 1.
+```bash
+# 安装pnpm（如果还没有）
+npm install -g pnpm
 
-### Step 3: Run the example
+# 安装所有依赖
+pnpm install
+```
 
-1. Make sure the node environment is v18
-  ```bash
-  node -v
-  ```
+### 开发模式
 
-2. Install dependencies
+```bash
+# 同时启动前端和服务器
+pnpm dev
 
+# 仅启动前端
+pnpm dev:frontend
+
+# 仅启动服务器
+pnpm dev:server
+```
+
+### 构建
+
+```bash
+# 构建所有包
+pnpm build
+
+# 构建前端
+pnpm build:frontend
+
+# 构建服务器
+pnpm build:server
+```
+
+## 部署
+
+### 前端部署（Vercel）
+
+1. 在Vercel创建新项目
+2. 连接GitHub仓库
+3. 设置根目录为 `packages/frontend`
+4. 设置构建命令为 `pnpm build`
+5. 设置输出目录为 `dist`
+
+### 服务器部署（Railway）
+
+1. 在Railway创建新项目
+2. 连接GitHub仓库的 `websocket-server` 分支
+3. 设置根目录为 `packages/websocket-server`
+4. 设置启动命令为 `pnpm start`
+
+## 开发指南
+
+### 本地开发
+
+1. 启动完整开发环境：
    ```bash
-   cd TUIRoomKit/Web/example/vite-vue3-ts
-   
-   npm install
+   pnpm dev
    ```
 
-3. Run the sample project in the development environment
+2. 前端访问：http://localhost:5173
+3. WebSocket服务器：ws://localhost:8080
 
-   ```bash
-   npm run dev
-   ```
+### 代码结构
 
-### Step 4. Try out the demo
+- **前端**：Vue 3 + TypeScript + Vite
+- **服务器**：Node.js + WebSocket
+- **包管理**：pnpm + Monorepo
 
-Open `http://localhost:3000/#/home` in a browser to try out TUIRoomKit.
+### 环境配置
 
-**Anchor (userId: anchor)**
+- 开发环境：自动连接到本地WebSocket服务器
+- 生产环境：连接到Railway部署的WebSocket服务器
 
-- 1. On the home page, click **New Room**.
-- 2. Enter a room.
+## 功能特性
 
-| 1 | 2 |
-|---------|---------|
-| <img src="https://qcloudimg.tencent-cloud.cn/raw/caf8a9f6d5322ef5b07420bef0ff9f42.png" width="320"/> | <img src="https://qcloudimg.tencent-cloud.cn/raw/c3982208a81f5b0f774c5bfadc6e7b99.png" width="320"/> |
+- 🌐 多语言实时翻译
+- 👥 多用户支持
+- 🔄 实时WebSocket通信
+- 📱 响应式设计
+- 🌍 国际化支持
 
-**Participant (userId: audience)**
+## 技术栈
 
-- 1. On the home page, enter the ID of the room created by the anchor and click **Join Room**.
-- 2. Enter the room.
+- **前端**：Vue 3, TypeScript, Vite, Pinia
+- **后端**：Node.js, WebSocket
+- **部署**：Vercel (前端), Railway (后端)
+- **包管理**：pnpm + Monorepo
 
-| 1 | 2 |
-|---------|---------|
-| <img src="https://qcloudimg.tencent-cloud.cn/raw/6e0db32e8497c00221018a80bd7ceaab.png" width="320"/> | <img src="https://qcloudimg.tencent-cloud.cn/raw/c3982208a81f5b0f774c5bfadc6e7b99.png" width="320"/> |
+## 贡献
 
-### Step 5: Production Environment Deployment
-- 1. Generate deployment files
+1. Fork 项目
+2. 创建功能分支
+3. 提交更改
+4. 推送到分支
+5. 创建 Pull Request
 
-   ```bash
-   npm run build
-   ```
-- 2. Deploy the dist file to the server
+## 许可证
 
->! Production environments require the use of https domains
-
-<img src="https://qcloudimg.tencent-cloud.cn/raw/3af0ebbc654340a27ed4a2780f64e510.png" width="100%"/>
-
-## FAQs
-
-### I deployed the demo project in the testing/development environment. The mic and camera did not work. What should I do?
-
-Make sure you used an HTTPS URL. For the sake of data security and privacy protection, your browser may restrict HTTP URLs. To access all features of the TRTC web SDK (WebRTC), please use an HTTPS URL.
-
-
-## Other
-
-- Welcome to join our Telegram Group to communicate with our professional engineers! We are more than happy to hear from you~
-Click to join: [https://t.me/+EPk6TMZEZMM5OGY1](https://t.me/+EPk6TMZEZMM5OGY1)   
-Or scan the QR code   
-  <img src="https://qcloudimg.tencent-cloud.cn/raw/79cbfd13877704ff6e17f30de09002dd.jpg" width="300px">
+MIT License

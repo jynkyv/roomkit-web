@@ -1,0 +1,21 @@
+{
+  "name": "websocket-server",
+  "version": "1.0.0",
+  "description": "RoomKit WebSocket翻译服务器",
+  "main": "translationServer.js",
+  "scripts": {
+    "start": "node translationServer.js",
+    "dev": "nodemon translationServer.js",
+    "build": "echo 'No build step needed for Node.js server'",
+    "clean": "echo 'No clean step needed'"
+  },
+  "dependencies": {
+    "ws": "^8.13.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+} 
