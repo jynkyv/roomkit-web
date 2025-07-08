@@ -54,10 +54,6 @@
         </div>
       </div>
     </div>
-
-    <div v-if="selectedUserId" class="selected-user-info">
-      <p>已选择: {{ getSelectedUserName() }}</p>
-    </div>
   </div>
 </template>
 
@@ -338,20 +334,6 @@ onUnmounted(() => {
 
 .btn-stop:hover {
   background: #c82333;
-}
-
-.selected-user-info {
-  margin-top: 16px;
-  padding: 12px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  text-align: center;
-}
-
-.selected-user-info p {
-  margin: 0;
-  font-size: 14px;
-  color: #495057;
 }
 
 @media (max-width: 768px) {

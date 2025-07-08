@@ -4,9 +4,14 @@
     <div class="translator-header">
       <div class="translator-title">
         <span class="translator-icon">🌐</span>
-        <span>实时翻译</span>
+        <span>翻译</span>
       </div>
-      <button class="close-btn" @click="toggleTranslator">×</button>
+      <div class="header-right">
+        <span class="connection-status" :class="{ connected: isWebSocketConnected }">
+          {{ isWebSocketConnected ? '已连接' : '未连接' }}
+        </span>
+        <button class="close-btn" @click="toggleTranslator">×</button>
+      </div>
     </div>
 
     <div class="translator-content">
@@ -14,18 +19,17 @@
       <div v-if="!isRecording" class="language-controls">
         <div class="section-title">翻译设置</div>
         <div class="lang-selector">
-          <select v-model="fromLang" class="lang-select">
+          <select v-model="fromLang" class="lang-select" :disabled="isInitiating">
             <option value="zh-CHS">中文</option>
             <option value="en">英语</option>
             <option value="ja">日语</option>
-            <option value="ko">韩语</option>
+
           </select>
           <span class="arrow">→</span>
-          <select v-model="toLang" class="lang-select">
+          <select v-model="toLang" class="lang-select" :disabled="isInitiating">
             <option value="en">英语</option>
             <option value="zh-CHS">中文</option>
             <option value="ja">日语</option>
-            <option value="ko">韩语</option>
           </select>
         </div>
       </div>
@@ -45,30 +49,12 @@
       <!-- 控制按钮 -->
       <div class="action-buttons">
         <button
-          v-if="!isRecording"
-          @click="showUserSelector = true"
-          class="btn btn-select-user"
-        >
-          选择用户
-        </button>
-        <button
           v-if="isRecording"
           @click="stopRecording"
           class="btn btn-stop"
         >
           停止翻译
         </button>
-        <button @click="clearResults" :disabled="isRecording" class="btn btn-clear">
-          清空结果
-        </button>
-      </div>
-
-      <!-- 状态指示器 -->
-      <div class="status-indicator" :class="{ active: isRecording }">
-        <div class="status-text">{{ connectionStatus }}</div>
-        <div v-if="currentTargetUser" class="target-user">
-          翻译目标: {{ currentTargetUser.name }}
-        </div>
       </div>
     </div>
 
@@ -114,11 +100,11 @@ const emit = defineEmits<{
 const fromLang = ref('zh-CHS');
 const toLang = ref('en');
 const isRecording = ref(false);
+const isInitiating = ref(false); // 发起翻译的状态
 const connectionStatus = ref('未连接');
 const error = ref('');
 const showUserSelector = ref(false);
 const currentTargetUser = ref<TranslationUser | null>(null);
-const isInitiator = ref(false); // 是否是发起翻译的用户
 const isWebSocketConnected = ref(false);
 
 const recognitionResults = ref<Array<{ text: string; timestamp: number }>>([]);
@@ -232,7 +218,7 @@ const handleTranslationStarted = (userId: string, userName: string) => {
     isOnline: true
   };
   showUserSelector.value = false;
-  isInitiator.value = true;
+  isInitiating.value = true;
   
   // 作为发起者，只发送指令，不录音
   connectionStatus.value = '等待目标用户开始翻译...';
@@ -244,7 +230,7 @@ const handleTranslationStopped = (userId: string) => {
   if (currentTargetUser.value?.id === userId) {
     stopRecording();
     currentTargetUser.value = null;
-    isInitiator.value = false;
+    isInitiating.value = false;
   }
 };
 
@@ -547,14 +533,7 @@ const stopRecording = () => {
   isRecording.value = false
   connectionStatus.value = '已停止'
   currentTargetUser.value = null;
-  isInitiator.value = false;
-}
-
-// 清空结果
-const clearResults = () => {
-  recognitionResults.value = []
-  translationResults.value = []
-  error.value = ''
+  isInitiating.value = false;
 }
 
 // 格式化时间
@@ -720,6 +699,22 @@ watch(
   font-size: 16px;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.connection-status {
+  font-size: 13px;
+  font-weight: 500;
+  color: #28a745;
+}
+
+.connection-status.connected {
+  color: #28a745;
+}
+
 .close-btn {
   background: none;
   border: none;
@@ -775,6 +770,17 @@ watch(
   color: #495057;
 }
 
+.lang-select:disabled {
+  background: #f8f9fa;
+  color: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.lang-select:disabled:hover {
+  border-color: #dee2e6;
+}
+
 .arrow {
   color: #6c757d;
   font-size: 14px;
@@ -802,15 +808,6 @@ watch(
   cursor: not-allowed;
 }
 
-.btn-select-user {
-  background: #007bff;
-  color: #fff;
-}
-
-.btn-select-user:hover {
-  background: #0056b3;
-}
-
 .btn-stop {
   background: #dc3545;
   color: #fff;
@@ -818,42 +815,6 @@ watch(
 
 .btn-stop:hover {
   background: #c82333;
-}
-
-.btn-clear {
-  background: #f8f9fa;
-  color: #6c757d;
-  border: 1px solid #dee2e6;
-}
-
-.btn-clear:hover {
-  background: #e9ecef;
-}
-
-.status-indicator {
-  text-align: center;
-  padding: 8px;
-  margin-bottom: 12px;
-  border-radius: 6px;
-  background: #f8f9fa;
-  color: #6c757d;
-  font-size: 13px;
-  transition: all 0.2s;
-}
-
-.status-indicator.active {
-  background: #d4edda;
-  color: #155724;
-}
-
-.status-text {
-  margin-bottom: 4px;
-}
-
-.target-user {
-  font-size: 12px;
-  color: #28a745;
-  font-weight: 500;
 }
 
 .error-message {
