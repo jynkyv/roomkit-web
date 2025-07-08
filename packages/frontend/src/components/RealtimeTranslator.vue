@@ -91,6 +91,8 @@ const { t } = useI18n();
 // 响应式数据
 const fromLang = ref('zh-CHS');
 const toLang = ref('en');
+const apiFromLang = ref('zh-CHS');
+const apiToLang = ref('en');
 const isRecording = ref(false);
 const isInitiating = ref(false); // 发起翻译的状态
 const connectionStatus = ref(t('Disconnected'));
@@ -343,8 +345,8 @@ const connectWebSocket = async (): Promise<void> => {
       curtime,
       sign,
       signType: 'v4',
-      from: fromLang.value,
-      to: toLang.value,
+      from: apiFromLang.value,
+      to: apiToLang.value,
       format: 'wav',
       channel: '1',
       version: 'v1',
@@ -580,14 +582,14 @@ const handleStartTranslation = (data: any) => {
       isOnline: true
     };
     
-    // 先设置语言设置，确保被翻译方使用正确的语言
+    // 设置API专用的语言设置，不修改本地翻译设置
     if (data.fromLang) {
-      fromLang.value = data.fromLang;
-      console.log('设置 fromLang:', data.fromLang);
+      apiFromLang.value = data.fromLang;
+      console.log('设置 apiFromLang:', data.fromLang);
     }
     if (data.toLang) {
-      toLang.value = data.toLang;
-      console.log('设置 toLang:', data.toLang);
+      apiToLang.value = data.toLang;
+      console.log('设置 apiToLang:', data.toLang);
     }
     
     // 然后开始录音和翻译
