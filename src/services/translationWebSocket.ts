@@ -128,11 +128,25 @@ class TranslationWebSocketService {
   }
 
   // 开始翻译
-  startTranslation(targetUserId: string): void {
+  startTranslation(targetUserId: string, fromLang: string, toLang: string): void {
+    console.log('translationWebSocketService startTranslation 参数:', {
+      targetUserId,
+      fromLang,
+      toLang
+    });
     this.sendMessage({
       type: 'start_translation',
       fromUserId: this.currentUserId,
-      toUserId: targetUserId
+      toUserId: targetUserId,
+      fromLang,
+      toLang
+    });
+    console.log('发送 start_translation 消息:', {
+      type: 'start_translation',
+      fromUserId: this.currentUserId,
+      toUserId: targetUserId,
+      fromLang,
+      toLang
     });
   }
 

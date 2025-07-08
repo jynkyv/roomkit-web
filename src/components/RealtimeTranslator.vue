@@ -10,15 +10,6 @@
     </div>
 
     <div class="translator-content">
-      <!-- 用户选择器 -->
-      <div v-if="!isRecording" class="user-selection">
-        <UserSelector 
-          v-model:showSelector="showUserSelector"
-          @translation-started="handleTranslationStarted"
-          @translation-stopped="handleTranslationStopped"
-        />
-      </div>
-
       <!-- 语言控制 -->
       <div v-if="!isRecording" class="language-controls">
         <div class="section-title">翻译设置</div>
@@ -37,6 +28,18 @@
             <option value="ko">韩语</option>
           </select>
         </div>
+      </div>
+
+      <!-- 用户选择器 -->
+      <div v-if="!isRecording" class="user-selection">
+        <div class="section-title">选择翻译目标</div>
+        <UserSelector 
+          v-model:showSelector="showUserSelector"
+          @translation-started="handleTranslationStarted"
+          @translation-stopped="handleTranslationStopped"
+          :fromLang="fromLang"
+          :toLang="toLang"
+        />
       </div>
 
       <!-- 控制按钮 -->
@@ -591,6 +594,18 @@ const handleStartTranslation = (data: any) => {
       name: '发起用户', // 这里可以从用户列表获取名称
       isOnline: true
     };
+    
+    // 先设置语言设置，确保被翻译方使用正确的语言
+    if (data.fromLang) {
+      fromLang.value = data.fromLang;
+      console.log('设置 fromLang:', data.fromLang);
+    }
+    if (data.toLang) {
+      toLang.value = data.toLang;
+      console.log('设置 toLang:', data.toLang);
+    }
+    
+    // 然后开始录音和翻译
     startRecording();
   }
 };

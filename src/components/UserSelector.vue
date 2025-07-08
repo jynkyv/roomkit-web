@@ -68,6 +68,8 @@ import { translationWebSocketService, type TranslationUser } from '@/services/tr
 // Props
 interface Props {
   showSelector: boolean;
+  fromLang?: string;
+  toLang?: string;
 }
 
 const props = defineProps<Props>();
@@ -107,8 +109,17 @@ const getSelectedUserName = (): string => {
 const startTranslation = (userId: string) => {
   const user = users.value.find(u => u.id === userId);
   if (user && user.isOnline) {
-    // 发送开始翻译指令给目标用户
-    translationWebSocketService.startTranslation(userId);
+    // 发送开始翻译指令给目标用户，带上当前的语言设置
+    console.log('UserSelector startTranslation 参数:', {
+      userId,
+      fromLang: props.fromLang,
+      toLang: props.toLang
+    });
+    translationWebSocketService.startTranslation(
+      userId,
+      props.fromLang || 'zh-CHS',
+      props.toLang || 'en'
+    );
     activeTranslations.value.add(userId);
     emit('translation-started', userId, user.name);
   }

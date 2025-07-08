@@ -63,7 +63,9 @@ wss.on('connection', (ws, req) => {
             targetWs.send(JSON.stringify({
               type: 'start_translation',
               fromUserId: data.fromUserId,
-              toUserId: data.toUserId
+              toUserId: data.toUserId,
+              fromLang: data.fromLang,
+              toLang: data.toLang
             }));
           }
           break;
