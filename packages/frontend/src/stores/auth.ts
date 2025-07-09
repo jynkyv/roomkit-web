@@ -18,8 +18,8 @@ export interface User {
 }
 
 // 腾讯云配置
-const SDKAPPID = 1600095185
-const SDKSECRETKEY = '1cb3faaed3543947fa61450a179db1de95b3469d27555e305aace5eb5a7f5e8b'
+const SDKAPPID = Number(import.meta.env.VITE_TENCENT_SDK_APP_ID)
+const SDKSECRETKEY = import.meta.env.VITE_TENCENT_SDK_SECRET_KEY
 const EXPIRETIME = 604800
 
 export const useAuthStore = defineStore('auth', () => {
