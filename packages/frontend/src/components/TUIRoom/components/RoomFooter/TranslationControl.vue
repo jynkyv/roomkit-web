@@ -9,7 +9,7 @@
     </icon-button>
     
     <!-- 翻译面板 -->
-    <div v-if="showTranslationPanel" class="translation-panel">
+    <div v-show="showTranslationPanel" class="translation-panel">
       <div class="panel-header">
         <h3>{{ t('Translation') }}</h3>
         <button class="close-btn" @click="toggleTranslationPanel">×</button>

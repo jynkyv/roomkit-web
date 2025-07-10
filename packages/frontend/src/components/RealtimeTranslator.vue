@@ -1,6 +1,6 @@
 <!-- eslint-disable -->
 <template>
-  <div class="translator-widget" v-if="showTranslator">
+  <div class="translator-widget" v-show="showTranslator">
     <div class="translator-content">
       <!-- 语言控制 -->
       <div class="language-controls">
