@@ -401,13 +401,14 @@ const connectWebSocket = async (): Promise<void> => {
 
     const wsUrl = `wss://openapi.youdao.com/stream_speech_trans?${params.toString()}`
 
-    console.log('WebSocket连接URL:', wsUrl);
+    console.log('有道翻译WebSocket连接URL:', wsUrl);
+    console.log('使用的语言设置:', { from: apiFromLang.value, to: apiToLang.value });
 
     ws = new WebSocket(wsUrl)
 
     ws.onopen = () => {
       connectionStatus.value = t('Connected')
-      console.log('有道翻译WebSocket连接成功');
+      console.log('有道翻译WebSocket连接成功，语言设置:', { from: apiFromLang.value, to: apiToLang.value });
       resolve()
     }
 
@@ -615,7 +616,10 @@ const handleTranslationResult = (data: any) => {
 // 监听开始翻译指令（作为被翻译的用户）
 const handleStartTranslation = (data: any) => {
   if (data.toUserId === translationWebSocketService.getCurrentUserId()) {
-    console.log('收到开始翻译指令，开始录音和翻译');
+    console.log('收到开始翻译指令:', data);
+    console.log('当前本地语言设置:', { fromLang: fromLang.value, toLang: toLang.value });
+    console.log('指令中的语言设置:', { fromLang: data.fromLang, toLang: data.toLang });
+    
     // 新增一条被要求翻译的会话
     activeIncomingSessions.value.set(data.fromUserId, {
       fromUserId: data.fromUserId,
@@ -623,11 +627,29 @@ const handleStartTranslation = (data: any) => {
       fromLang: data.fromLang || 'zh-CHS',
       toLang: data.toLang || 'en',
     });
+    
     // 设置API专用的语言设置，不修改本地翻译设置
-    if (data.fromLang) apiFromLang.value = data.fromLang;
-    if (data.toLang) apiToLang.value = data.toLang;
-    // 如果没有在录音，则启动有道API
-    if (!isRecording.value) startRecording();
+    if (data.fromLang) {
+      apiFromLang.value = data.fromLang;
+      console.log('设置 apiFromLang:', data.fromLang);
+    }
+    if (data.toLang) {
+      apiToLang.value = data.toLang;
+      console.log('设置 apiToLang:', data.toLang);
+    }
+    
+    console.log('设置后的API语言设置:', { from: apiFromLang.value, to: apiToLang.value });
+    
+    // 如果已经在录音，先停止当前连接
+    if (isRecording.value) {
+      console.log('停止当前翻译连接，使用新的语言设置重新连接');
+      stopYoudaoTranslation();
+    }
+    
+    // 延迟一下确保连接完全关闭，然后重新开始录音
+    setTimeout(() => {
+      startRecording();
+    }, 100);
   }
 };
 
