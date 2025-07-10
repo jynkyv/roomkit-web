@@ -68,6 +68,7 @@ interface Props {
   showSelector: boolean;
   fromLang?: string;
   toLang?: string;
+  activeTranslationSessions?: Map<string, any>; // 新增
 }
 
 const props = defineProps<Props>();
@@ -157,7 +158,14 @@ const handleUserRemoved = (userId: string) => {
   activeTranslations.value.delete(userId);
 };
 
-// 生命周期
+// 添加一个方法来同步活跃翻译状态
+const syncActiveTranslations = () => {
+  // 从父组件获取当前活跃的翻译会话
+  // 这里需要通过props或者事件来获取
+  console.log('同步UserSelector中的活跃翻译状态');
+};
+
+// 修改生命周期
 onMounted(() => {
   // 注册事件监听器
   translationWebSocketService.on('user_list_updated', handleUserListUpdated);
@@ -166,6 +174,15 @@ onMounted(() => {
   
   // 初始化用户列表
   refreshUsers();
+  
+  // 同步活跃翻译状态
+  if (props.activeTranslationSessions) {
+    for (const [sessionId, session] of props.activeTranslationSessions.entries()) {
+      if (session.isInitiator) {
+        activeTranslations.value.add(session.targetUserId);
+      }
+    }
+  }
 });
 
 onUnmounted(() => {

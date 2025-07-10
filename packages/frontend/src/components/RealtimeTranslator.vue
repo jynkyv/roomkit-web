@@ -40,6 +40,7 @@
           @translation-stopped="handleTranslationStopped"
           :fromLang="fromLang"
           :toLang="toLang"
+          :activeTranslationSessions="activeTranslationSessions"
         />
       </div>
     </div>
@@ -50,7 +51,7 @@
   </div>
 
   <!-- 双语字幕显示 -->
-  <div class="subtitle-container" v-if="showTranslator && currentSubtitle">
+  <div class="subtitle-container" v-if="currentSubtitle">
     <div class="subtitle-content">
       <div class="subtitle-item" :key="currentSubtitle.id">
         <div class="subtitle-original">{{ currentSubtitle.original }}</div>
@@ -207,8 +208,49 @@ const initWebSocket = async () => {
 };
 
 // 方法
+// 添加一个方法来同步翻译状态
+const syncTranslationState = () => {
+  // 同步发起翻译的状态
+  const hasActiveInitiatorSessions = Array.from(activeTranslationSessions.value.values())
+    .some(session => session.isInitiator);
+  
+  if (hasActiveInitiatorSessions) {
+    isInitiating.value = true;
+    // 找到第一个活跃的发起者会话
+    const firstInitiatorSession = Array.from(activeTranslationSessions.value.values())
+      .find(session => session.isInitiator);
+    
+    if (firstInitiatorSession) {
+      currentTargetUser.value = {
+        id: firstInitiatorSession.targetUserId,
+        name: firstInitiatorSession.targetUserName,
+        isOnline: true
+      };
+      connectionStatus.value = t('Waiting for target user to start translation...');
+    }
+  } else {
+    isInitiating.value = false;
+    currentTargetUser.value = null;
+  }
+  
+  console.log('同步翻译状态:', {
+    isInitiating: isInitiating.value,
+    activeSessions: activeTranslationSessions.value.size,
+    incomingSessions: activeIncomingSessions.value.size
+  });
+};
+
+// 修改 toggleTranslator 方法
 const toggleTranslator = () => {
+  // 只是切换UI显示状态，不影响翻译进程
   emit('update:showTranslator', !props.showTranslator);
+  
+  // 如果当前有活跃的翻译会话，确保它们继续运行
+  console.log('切换翻译器UI显示状态，当前活跃翻译会话数:', activeTranslationSessions.value.size);
+  console.log('当前被要求翻译的会话数:', activeIncomingSessions.value.size);
+  
+  // 同步翻译状态
+  syncTranslationState();
 };
 
 // 处理翻译开始（作为发起者）
@@ -677,14 +719,20 @@ onMounted(async () => {
   
   // 初始化WebSocket连接
   await initWebSocket();
+  
+  // 同步当前的翻译状态
+  syncTranslationState();
 });
 
 // 组件卸载时清理资源
 onUnmounted(() => {
-  // 只停止有道翻译，不关闭用户间WebSocket连接
+  // 只停止有道翻译（作为被翻译者），不停止你发起的翻译
   if (isRecording.value) {
     stopYoudaoTranslation();
   }
+  
+  // 不要停止你发起的翻译会话
+  // 让它们继续运行，直到目标用户主动停止
   
   translationWebSocketService.off('translation_result', handleTranslationResult);
   translationWebSocketService.off('start_translation', handleStartTranslation);
