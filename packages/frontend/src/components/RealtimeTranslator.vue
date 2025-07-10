@@ -21,14 +21,12 @@
         <div class="lang-selector">
           <select v-model="fromLang" class="lang-select" :disabled="isInitiating">
             <option value="zh-CHS">{{ t('Chinese') }}</option>
-            <option value="en">{{ t('English') }}</option>
             <option value="ja">{{ t('Japanese') }}</option>
           </select>
           <span class="arrow">→</span>
           <select v-model="toLang" class="lang-select" :disabled="isInitiating">
-            <option value="en">{{ t('English') }}</option>
+            <option value="ja">{{ t('Japanese') }}</option> 
             <option value="zh-CHS">{{ t('Chinese') }}</option>
-            <option value="ja">{{ t('Japanese') }}</option>
           </select>
         </div>
       </div>
