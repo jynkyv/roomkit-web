@@ -623,7 +623,7 @@ const handleStartTranslation = (data: any) => {
       fromUserId: data.fromUserId,
       fromUserName: data.fromUserName || '发起用户',
       fromLang: data.fromLang || 'zh-CHS',
-      toLang: data.toLang || 'en',
+      toLang: data.toLang || 'ja',
     });
     
     // 设置API专用的语言设置，不修改本地翻译设置
