@@ -21,44 +21,44 @@
       />
     </div>
     <div class="center-container">
-      <screen-share-control
-        class="center-container-item"
-        @click="handleControlClick('screenShareControl')"
-      />
-      <whiteboard-control
+      <!-- <whiteboard-control
         v-if="isElectron"
         class="center-container-item"
         @click="handleControlClick('whiteboard')"
-      />
+      /> -->
       <full-screen-control
         class="center-container-item"
         @click="handleControlClick('fullScreenControl')"
       />
-      <manage-member-control
+      <!-- <manage-member-control
         class="center-container-item"
         @click="handleControlClick('manageMemberControl')"
-      />
-      <invite-control
+      /> -->
+      <!-- <invite-control
         class="center-container-item"
         @click="handleControlClick('inviteControl')"
-      />
+      /> -->
       <chat-control
         class="center-container-item"
         @click="handleControlClick('chatControl')"
+      />
+      <translation-control
+        class="center-container-item"
+        @click="handleControlClick('translationControl')"
       />
       <master-apply-control
         v-if="roomStore.isSpeakAfterTakingSeatMode && (isMaster || isAdmin)"
         class="center-container-item"
         @click="handleControlClick('MasterApplyControl')"
       />
-      <more-control
+      <!-- <more-control
         class="center-container-item"
         @click="handleControlClick('moreControl')"
-      />
-      <AIControl
+      /> -->
+      <!-- <AIControl
         class="center-container-item"
         @click="handleControlClick('AIControl')"
-      />
+      /> -->
       <setting-control
         class="center-container-item"
         @click="handleControlClick('settingControl')"
@@ -91,6 +91,7 @@ import SettingControl from '../SettingControl.vue';
 import WhiteboardControl from '../WhiteboardControl.vue';
 import VirtualBackground from '../VirtualBackground.vue';
 import AIControl from '../AIControl.vue';
+import TranslationControl from '../TranslationControl.vue';
 import BasicBeauty from '../BasicBeauty.vue';
 import bus from '../../../hooks/useMitt';
 

@@ -2,19 +2,15 @@
   <div class="room-container">
     <conference-main-view display-mode="permanent"></conference-main-view>
 
-    <!-- 翻译按钮 -->
-    <button
-      @click="toggleTranslator"
-      class="translator-toggle-btn"
-      :class="{ active: showTranslator }"
-    >
-      🌐
-    </button>
-
-    <!-- 翻译组件 -->
-    <RealtimeTranslator
-      v-model:showTranslator="showTranslator"
-    />
+    <!-- 只保留字幕显示，翻译控制已集成到底部控制栏 -->
+    <div class="subtitle-container" v-if="currentSubtitle">
+      <div class="subtitle-content">
+        <div class="subtitle-item" :key="currentSubtitle.id">
+          <div class="subtitle-original">{{ currentSubtitle.original }}</div>
+          <div class="subtitle-translation">{{ currentSubtitle.translation }}</div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -26,12 +22,40 @@ import router from '../router/index';
 import i18n, { useI18n } from '../locales/index';
 import { getLanguage, getTheme } from  '../utils/utils';
 import { useUIKit } from '@tencentcloud/uikit-base-component-vue3';
-import RealtimeTranslator from '../components/RealtimeTranslator.vue';
+import { translationWebSocketService } from '../services/translationWebSocket';
+
 const { t } = useI18n();
 const { theme } = useUIKit();
 
-// 翻译相关状态
-const showTranslator = ref(false);
+// 字幕相关状态
+const currentSubtitle = ref<{ original: string; translation: string; id: number; timestamp: number } | null>(null);
+const subtitleTimeout = ref<number | null>(null);
+
+// 新字幕到来时显示并自动淡出
+const showSubtitle = (original: string, translation: string) => {
+  if (subtitleTimeout.value) {
+    clearTimeout(subtitleTimeout.value);
+    subtitleTimeout.value = null;
+  }
+  currentSubtitle.value = {
+    original,
+    translation,
+    id: Date.now(),
+    timestamp: Date.now(),
+  };
+  // 5秒后自动隐藏
+  subtitleTimeout.value = window.setTimeout(() => {
+    currentSubtitle.value = null;
+    subtitleTimeout.value = null;
+  }, 5000);
+};
+
+// 监听WebSocket翻译结果
+const handleTranslationResult = (data: any) => {
+  if (data.fromUserId !== translationWebSocketService.getCurrentUserId()) {
+    showSubtitle(data.data.original, data.data.translation);
+  }
+};
 
 const route = useRoute();
 const roomInfo = sessionStorage.getItem('tuiRoom-roomInfo');
@@ -41,11 +65,6 @@ conference.setLanguage(getLanguage() as LanguageOption);
 !theme.value && conference.setTheme(getTheme() as ThemeOption);
 let isMaster = false;
 let isExpectedJump = false;
-
-// 翻译相关方法
-const toggleTranslator = () => {
-  showTranslator.value = !showTranslator.value;
-};
 
 if (!roomId) {
   router.push({ path: 'home' });
@@ -79,6 +98,9 @@ onMounted(async () => {
   } catch (error: any) {
     sessionStorage.removeItem('tuiRoom-currentUserInfo');
   }
+  
+  // 注册翻译结果监听
+  translationWebSocketService.on('translation_result', handleTranslationResult);
 });
 
 onBeforeRouteLeave((to: any, from: any, next: any) => {
@@ -135,6 +157,9 @@ onUnmounted(() => {
   conference.off(RoomEvent.USER_LOGOUT, backToHomeAndClearUserInfo);
   conference.off(RoomEvent.LANGUAGE_CHANGED, changeLanguage);
   conference.off(RoomEvent.THEME_CHANGED, changeTheme);
+  
+  // 移除翻译结果监听
+  translationWebSocketService.off('translation_result', handleTranslationResult);
 });
 
 const goToPage = (routePath: string) => {
@@ -159,44 +184,69 @@ const goToPage = (routePath: string) => {
   height: 100%;
 }
 
-.translator-toggle-btn {
+/* 字幕样式 */
+.subtitle-container {
   position: fixed;
-  top: 70px;
-  right: 20px;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background: #fff;
-  border: 2px solid #e9ecef;
-  font-size: 20px;
-  cursor: pointer;
-  z-index: 999;
+  bottom: 80px;
+  left: 0;
+  right: 0;
+  z-index: 1001;
+  padding: 0 20px;
+  pointer-events: none;
+}
+
+.subtitle-content {
+  max-width: 800px;
+  margin: 0 auto;
   display: flex;
-  align-items: center;
-  justify-content: center;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
+  flex-direction: column;
+  gap: 8px;
+}
 
-  &:hover {
-    background: #f8f9fa;
-    border-color: #28a745;
-    transform: scale(1.05);
-  }
+.subtitle-item {
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 8px;
+  padding: 12px 16px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
 
-  &.active {
-    background: #28a745;
-    border-color: #28a745;
-    color: #fff;
-  }
+.subtitle-original {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.subtitle-translation {
+  color: #ffd700;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.3;
+  opacity: 0.9;
 }
 
 @media (max-width: 768px) {
-  .translator-toggle-btn {
-    top: 10px;
-    right: 10px;
-    width: 45px;
-    height: 45px;
-    font-size: 18px;
+  .subtitle-container {
+    bottom: 60px;
+    padding: 0 15px;
+  }
+  
+  .subtitle-content {
+    max-width: 100%;
+  }
+  
+  .subtitle-item {
+    padding: 10px 12px;
+  }
+  
+  .subtitle-original {
+    font-size: 14px;
+  }
+  
+  .subtitle-translation {
+    font-size: 12px;
   }
 }
 </style>
