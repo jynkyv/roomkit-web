@@ -88,9 +88,9 @@ const { t } = useI18n();
 
 // 响应式数据
 const fromLang = ref('zh-CHS');
-const toLang = ref('en');
+const toLang = ref('ja');
 const apiFromLang = ref('zh-CHS');
-const apiToLang = ref('en');
+const apiToLang = ref('ja');
 const isRecording = ref(false);
 const isInitiating = ref(false); // 发起翻译的状态
 const connectionStatus = ref(t('Disconnected'));
