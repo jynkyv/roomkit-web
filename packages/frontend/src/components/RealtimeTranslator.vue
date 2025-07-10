@@ -1,19 +1,6 @@
 <!-- eslint-disable -->
 <template>
   <div class="translator-widget" v-if="showTranslator">
-    <div class="translator-header">
-      <div class="translator-title">
-        <span class="translator-icon">🌐</span>
-        <span>{{ t('Translation') }}</span>
-      </div>
-      <div class="header-right">
-        <span class="connection-status" :class="{ connected: isWebSocketConnected }">
-          {{ isWebSocketConnected ? t('Connected') : t('Disconnected') }}
-        </span>
-        <button class="close-btn" @click="toggleTranslator">×</button>
-      </div>
-    </div>
-
     <div class="translator-content">
       <!-- 语言控制 -->
       <div class="language-controls">
@@ -805,64 +792,6 @@ const sendTranslationResultsToAll = (original: string, translation: string) => {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
   color: #333;
-}
-
-.translator-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background: #f8f9fa;
-  border-radius: 12px 12px 0 0;
-  border-bottom: 1px solid #e9ecef;
-}
-
-.translator-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-  font-size: 15px;
-}
-
-.translator-icon {
-  font-size: 16px;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.connection-status {
-  font-size: 13px;
-  font-weight: 500;
-  color: #28a745;
-}
-
-.connection-status.connected {
-  color: #28a745;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 20px;
-  color: #6c757d;
-  cursor: pointer;
-  padding: 0;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-
-.close-btn:hover {
-  background-color: #e9ecef;
 }
 
 .translator-content {
