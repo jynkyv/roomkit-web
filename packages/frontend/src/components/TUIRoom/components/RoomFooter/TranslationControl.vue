@@ -68,7 +68,7 @@ const handleTranslatorVisibilityChange = (visible: boolean) => {
   position: absolute;
   bottom: 100%;
   right: 0;
-  width: 420px; /* 稍微宽一点以适应 RealtimeTranslator */
+  width: 460px; /* 从420px增加到460px */
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
@@ -141,7 +141,7 @@ const handleTranslatorVisibilityChange = (visible: boolean) => {
 
 @media (max-width: 768px) {
   .translation-panel {
-    width: 360px;
+    width: 400px; /* 从360px增加到400px */
     right: -50px;
   }
 }

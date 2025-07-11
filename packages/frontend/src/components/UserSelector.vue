@@ -20,12 +20,13 @@
         :class="{ 
           'selected': selectedUserId === user.id,
           'translating': isUserBeingTranslated(user.id),
-          'viewing': isCurrentUserViewing(user.id)
+          'viewing': isCurrentUserViewing(user.id),
+          'active-session': isUserBeingTranslated(user.id) || isCurrentUserViewing(user.id)
         }"
         @click="selectUser(user.id)"
       >
         <div class="user-info">
-          <div class="user-avatar">
+          <div class="user-avatar" :class="{ 'active': isUserBeingTranslated(user.id) || isCurrentUserViewing(user.id) }">
             {{ user.name.charAt(0).toUpperCase() }}
           </div>
           <div class="user-details">
@@ -36,9 +37,16 @@
             </div>
             <!-- 翻译状态显示 -->
             <div v-if="user.translationStatus && user.translationStatus.isActive" class="translation-status">
-              <span class="translation-indicator">🔄</span>
-              {{ t('Translating') }}: {{ getLangDisplay(user.translationStatus.fromLang) }} → {{ getLangDisplay(user.translationStatus.toLang) }}
-              <span v-if="isCurrentUserInitiator(user.id)" class="initiator-badge">({{ t('You initiated') }})</span>
+              <div class="status-indicator">
+                <span class="translation-icon">●</span>
+                <span class="status-text">{{ t('Translating') }}: {{ getLangDisplay(user.translationStatus.fromLang) }} → {{ getLangDisplay(user.translationStatus.toLang) }}</span>
+                <span v-if="isCurrentUserInitiator(user.id)" class="initiator-badge">{{ t('You initiated') }}</span>
+              </div>
+              <!-- 查看者信息 -->
+              <div v-if="user.translationStatus.viewers && user.translationStatus.viewers.length > 0" class="viewers-info">
+                <span class="viewers-icon">●</span>
+                <span class="viewers-count">{{ user.translationStatus.viewers.length }} {{ t('viewing') }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -387,8 +395,11 @@ onUnmounted(() => {
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   padding: 20px;
-  max-width: 400px;
+  max-width: 440px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* 添加额外的内边距来防止hover动画溢出 */
+  padding-top: 24px;
+  padding-bottom: 24px;
 }
 
 .selector-header {
@@ -430,6 +441,8 @@ onUnmounted(() => {
 .user-list {
   max-height: 300px;
   overflow-y: auto;
+  /* 添加内边距防止hover动画溢出 */
+  padding: 4px 0;
 }
 
 .no-users {
@@ -454,12 +467,20 @@ onUnmounted(() => {
   border-radius: 8px;
   margin-bottom: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  /* 添加margin来为hover动画留出空间 */
+  margin: 0 2px 8px 2px;
 }
 
 .user-item:hover {
   background: #f8f9fa;
   border-color: #adb5bd;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  /* 确保hover时不会超出容器 */
+  z-index: 1;
 }
 
 .user-item.selected {
@@ -469,12 +490,34 @@ onUnmounted(() => {
 
 .user-item.translating {
   border-color: #28a745;
-  background: #f0fff4;
+  background: linear-gradient(135deg, #f0fff4 0%, #e8f5e8 100%);
+  box-shadow: 0 2px 12px rgba(40, 167, 69, 0.15);
 }
 
 .user-item.viewing {
   border-color: #ffc107;
-  background: #fffbf0;
+  background: linear-gradient(135deg, #fffbf0 0%, #fff8e1 100%);
+  box-shadow: 0 2px 12px rgba(255, 193, 7, 0.15);
+}
+
+.user-item.active-session {
+  position: relative;
+}
+
+.user-item.active-session::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #28a745, #20c997);
+  animation: activeGlow 2s ease-in-out infinite;
+}
+
+@keyframes activeGlow {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
 }
 
 .user-info {
@@ -494,12 +537,31 @@ onUnmounted(() => {
   justify-content: center;
   font-weight: 600;
   font-size: 16px;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.user-avatar.active {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.2);
+  animation: avatarPulse 2s ease-in-out infinite;
+}
+
+@keyframes avatarPulse {
+  0%, 100% { 
+    box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.2);
+    transform: scale(1);
+  }
+  50% { 
+    box-shadow: 0 0 0 6px rgba(40, 167, 69, 0.1);
+    transform: scale(1.05);
+  }
 }
 
 .user-details {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .user-name {
@@ -521,33 +583,78 @@ onUnmounted(() => {
   height: 6px;
   border-radius: 50%;
   background: #dc3545;
+  transition: all 0.3s ease;
 }
 
 .status-dot.online {
   background: #28a745;
+  box-shadow: 0 0 4px rgba(40, 167, 69, 0.4);
 }
 
 .translation-status {
   display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.status-indicator {
+  display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   font-size: 11px;
   color: #28a745;
   font-weight: 500;
+  background: rgba(40, 167, 69, 0.1);
+  padding: 4px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(40, 167, 69, 0.2);
 }
 
-.translation-indicator {
-  font-size: 10px;
+.translation-icon {
+  font-size: 8px;
+  color: #28a745;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.status-text {
+  flex: 1;
 }
 
 .initiator-badge {
-  background-color: #e0e0e0;
-  color: #333;
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  color: #fff;
   padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
+  border-radius: 8px;
+  font-size: 9px;
   font-weight: 600;
-  margin-left: 8px;
+  white-space: nowrap;
+}
+
+.viewers-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #6c757d;
+  background: rgba(108, 117, 125, 0.1);
+  padding: 2px 6px;
+  border-radius: 8px;
+  margin-top: 2px;
+}
+
+.viewers-icon {
+  font-size: 6px;
+  color: #6c757d;
+}
+
+.viewers-count {
+  font-weight: 500;
 }
 
 .user-actions {
@@ -559,59 +666,86 @@ onUnmounted(() => {
 .btn-stop,
 .btn-view-translation,
 .btn-stop-viewing {
-  padding: 6px 12px;
+  padding: 8px 12px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
 }
 
 .btn-translate {
-  background: #28a745;
+  background: linear-gradient(135deg, #28a745, #20c997);
   color: #fff;
+  box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
 }
 
 .btn-translate:hover:not(:disabled) {
-  background: #218838;
+  background: linear-gradient(135deg, #218838, #1e7e34);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
 }
 
 .btn-translate:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-stop {
-  background: #dc3545;
+  background: linear-gradient(135deg, #dc3545, #c82333);
   color: #fff;
+  box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
 }
 
 .btn-stop:hover {
-  background: #c82333;
+  background: linear-gradient(135deg, #c82333, #bd2130);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
 }
 
 .btn-view-translation {
-  background: #ffc107;
+  background: linear-gradient(135deg, #ffc107, #e0a800);
   color: #212529;
+  box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
 }
 
 .btn-view-translation:hover:not(:disabled) {
-  background: #e0a800;
+  background: linear-gradient(135deg, #e0a800, #d39e00);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.4);
 }
 
 .btn-view-translation:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-stop-viewing {
-  background: #6c757d;
+  background: linear-gradient(135deg, #6c757d, #5a6268);
   color: #fff;
+  box-shadow: 0 2px 8px rgba(108, 117, 125, 0.3);
 }
 
 .btn-stop-viewing:hover {
-  background: #5a6268;
+  background: linear-gradient(135deg, #5a6268, #495057);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.4);
+}
+
+/* 按钮点击效果 */
+.btn-translate:active,
+.btn-stop:active,
+.btn-view-translation:active,
+.btn-stop-viewing:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
 @media (max-width: 768px) {
@@ -629,6 +763,14 @@ onUnmounted(() => {
   .user-actions {
     width: 100%;
     justify-content: flex-end;
+  }
+  
+  .translation-status {
+    width: 100%;
+  }
+  
+  .status-indicator {
+    flex-wrap: wrap;
   }
 }
 </style> 

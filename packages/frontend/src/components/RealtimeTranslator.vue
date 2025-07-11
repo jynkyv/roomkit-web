@@ -784,7 +784,7 @@ const sendTranslationResultsToAll = (original: string, translation: string) => {
   position: fixed;
   top: 20px;
   right: 20px;
-  width: 380px;
+  width: 420px; /* 从380px增加到420px */
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
