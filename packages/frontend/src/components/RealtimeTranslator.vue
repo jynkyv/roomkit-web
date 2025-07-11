@@ -36,45 +36,6 @@
       {{ error }}
     </div>
   </div>
-
-  <!-- 双语字幕显示 -->
-  <div class="subtitle-container" v-if="currentSubtitle">
-    <div class="subtitle-content">
-      <div class="subtitle-item" :key="currentSubtitle.id">
-        <div class="subtitle-original">{{ currentSubtitle.original }}</div>
-        <div class="subtitle-translation">{{ currentSubtitle.translation }}</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 翻译历史记录 -->
-  <div 
-    class="translation-history" 
-    v-if="translationHistory.length > 0"
-    :style="{ left: historyPosition.x + 'px', top: historyPosition.y + 'px' }"
-    ref="historyRef"
-  >
-    <div 
-      class="history-header"
-      @mousedown="startDrag"
-      @touchstart="startDrag"
-    >
-      <span class="history-title">{{ t('Translation History') }}</span>
-      <button class="clear-history-btn" @click="clearHistory" title="Clear history">
-        ×
-      </button>
-    </div>
-    <div class="history-content">
-      <div 
-        v-for="(item, index) in translationHistory" 
-        :key="item.id"
-        class="history-item"
-      >
-        <div class="history-text">{{ item.translation }}</div>
-        <div class="history-time">{{ formatTime(item.timestamp) }}</div>
-      </div>
-    </div>
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -139,19 +100,6 @@ const translationResults = ref<Array<{ text: string; timestamp: number }>>([]);
 // 专门用于WebSocket翻译结果的数组
 const websocketTranslationResults = ref<Array<{ original: string; translation: string; timestamp: number }>>([]);
 
-// 新增：翻译历史记录
-const translationHistory = ref<Array<{
-  id: string;
-  translation: string;
-  timestamp: number;
-}>>([]);
-
-// 新增：拖拽相关状态
-const historyRef = ref<HTMLElement | null>(null);
-const isDragging = ref(false);
-const dragStartPos = ref({ x: 0, y: 0 });
-const historyPosition = ref({ x: 420, y: 20 }); // 初始位置
-
 // WebSocket相关
 // 注意：ws变量只用于有道WebSocket，不要和用户间WebSocket混用！
 let ws: WebSocket | null = null;
@@ -195,85 +143,6 @@ const addNewSubtitle = () => {
     visibleSubtitles.value.add(latestSubtitle.id);
     fadeOutSubtitle(latestSubtitle.id);
   }
-};
-
-// 新增：添加翻译历史记录
-const addToHistory = (translation: string) => {
-  const historyItem = {
-    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-    translation,
-    timestamp: Date.now()
-  };
-  
-  translationHistory.value.unshift(historyItem);
-  
-  // 限制最多显示100条记录
-  if (translationHistory.value.length > 100) {
-    translationHistory.value = translationHistory.value.slice(0, 100);
-  }
-};
-
-// 新增：清空历史记录
-const clearHistory = () => {
-  translationHistory.value = [];
-};
-
-// 新增：格式化时间
-const formatTime = (timestamp: number): string => {
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString('zh-CN', { 
-    hour: '2-digit', 
-    minute: '2-digit', 
-    second: '2-digit' 
-  });
-};
-
-// 新增：开始拖拽
-const startDrag = (event: MouseEvent | TouchEvent) => {
-  event.preventDefault();
-  isDragging.value = true;
-  
-  const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
-  const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
-  
-  dragStartPos.value = {
-    x: clientX - historyPosition.value.x,
-    y: clientY - historyPosition.value.y
-  };
-  
-  document.addEventListener('mousemove', onDrag);
-  document.addEventListener('touchmove', onDrag);
-  document.addEventListener('mouseup', stopDrag);
-  document.addEventListener('touchend', stopDrag);
-};
-
-// 新增：拖拽中
-const onDrag = (event: MouseEvent | TouchEvent) => {
-  if (!isDragging.value) return;
-  
-  const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
-  const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
-  
-  const newX = clientX - dragStartPos.value.x;
-  const newY = clientY - dragStartPos.value.y;
-  
-  // 限制在窗口范围内
-  const maxX = window.innerWidth - 300; // 历史记录宽度
-  const maxY = window.innerHeight - 200; // 历史记录高度
-  
-  historyPosition.value = {
-    x: Math.max(0, Math.min(newX, maxX)),
-    y: Math.max(0, Math.min(newY, maxY))
-  };
-};
-
-// 新增：停止拖拽
-const stopDrag = () => {
-  isDragging.value = false;
-  document.removeEventListener('mousemove', onDrag);
-  document.removeEventListener('touchmove', onDrag);
-  document.removeEventListener('mouseup', stopDrag);
-  document.removeEventListener('touchend', stopDrag);
 };
 
 // 获取用户信息
@@ -752,11 +621,6 @@ const handleTranslationResult = (data: any) => {
       timestamp: data.data.timestamp,
     });
     
-    // 添加到历史记录
-    if (data.data.translation) {
-      addToHistory(data.data.translation);
-    }
-    
     console.log('收到WebSocket翻译结果:', data.data);
   }
 };
@@ -850,42 +714,6 @@ onUnmounted(() => {
   // translationWebSocketService.disconnect();
 });
 
-const currentSubtitle = ref<{ original: string; translation: string; id: number; timestamp: number } | null>(null);
-const subtitleTimeout = ref<number | null>(null);
-
-// 新字幕到来时显示并自动淡出
-const showSubtitle = (original: string, translation: string) => {
-  if (subtitleTimeout.value) {
-    clearTimeout(subtitleTimeout.value);
-    subtitleTimeout.value = null;
-  }
-  currentSubtitle.value = {
-    original,
-    translation,
-    id: Date.now(),
-    timestamp: Date.now(),
-  };
-  // 5秒后自动隐藏
-  subtitleTimeout.value = window.setTimeout(() => {
-    currentSubtitle.value = null;
-    subtitleTimeout.value = null;
-  }, 5000);
-};
-
-// 监听翻译结果，显示字幕
-watch(
-  websocketTranslationResults,
-  (results) => {
-    if (results.length > 0) {
-      const lastResult = results[results.length - 1];
-      if (lastResult.original || lastResult.translation) {
-        showSubtitle(lastResult.original, lastResult.translation);
-      }
-    }
-  },
-  { deep: true }
-);
-
 // 发送翻译结果给所有正在请求我的用户
 const sendTranslationResultsToAll = (original: string, translation: string) => {
   for (const [fromUserId, session] of activeIncomingSessions.value.entries()) {
@@ -896,11 +724,6 @@ const sendTranslationResultsToAll = (original: string, translation: string) => {
       fromUserId: translationWebSocketService.getCurrentUserId(),
       toUserId: fromUserId,
     });
-  }
-  
-  // 添加到历史记录
-  if (translation) {
-    addToHistory(translation);
   }
 };
 </script>

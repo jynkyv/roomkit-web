@@ -11,6 +11,35 @@
         </div>
       </div>
     </div>
+
+    <!-- 翻译历史记录 -->
+    <div 
+      class="translation-history" 
+      v-if="translationHistory.length > 0 && showHistory"
+      :style="{ left: historyPosition.x + 'px', top: historyPosition.y + 'px' }"
+      ref="historyRef"
+    >
+      <div 
+        class="history-header"
+        @mousedown="startDrag"
+        @touchstart="startDrag"
+      >
+        <span class="history-title">{{ t('Translation History') }}</span>
+        <button class="clear-history-btn" @click="clearHistory" title="Clear history">
+          ×
+        </button>
+      </div>
+      <div class="history-content">
+        <div 
+          v-for="(item, index) in translationHistory" 
+          :key="item.id"
+          class="history-item"
+        >
+          <div class="history-text">{{ item.translation }}</div>
+          <div class="history-time">{{ formatTime(item.timestamp) }}</div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -31,6 +60,22 @@ const { theme } = useUIKit();
 const currentSubtitle = ref<{ original: string; translation: string; id: number; timestamp: number } | null>(null);
 const subtitleTimeout = ref<number | null>(null);
 
+// 翻译历史相关状态
+const translationHistory = ref<Array<{
+  id: string;
+  translation: string;
+  timestamp: number;
+}>>([]);
+
+// 控制历史记录显示状态
+const showHistory = ref(false);
+
+// 拖拽相关状态
+const historyRef = ref<HTMLElement | null>(null);
+const isDragging = ref(false);
+const dragStartPos = ref({ x: 0, y: 0 });
+const historyPosition = ref({ x: 420, y: 20 }); // 初始位置
+
 // 新字幕到来时显示并自动淡出
 const showSubtitle = (original: string, translation: string) => {
   if (subtitleTimeout.value) {
@@ -50,10 +95,121 @@ const showSubtitle = (original: string, translation: string) => {
   }, 5000);
 };
 
+// 添加翻译历史记录
+const addToHistory = (translation: string) => {
+  const historyItem = {
+    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+    translation,
+    timestamp: Date.now()
+  };
+  
+  translationHistory.value.unshift(historyItem);
+  
+  // 限制最多显示100条记录
+  if (translationHistory.value.length > 100) {
+    translationHistory.value = translationHistory.value.slice(0, 100);
+  }
+  
+  // 显示历史记录
+  showHistory.value = true;
+};
+
+// 清空历史记录
+const clearHistory = () => {
+  translationHistory.value = [];
+  showHistory.value = false;
+};
+
+// 隐藏历史记录
+const hideHistory = () => {
+  showHistory.value = false;
+};
+
+// 格式化时间
+const formatTime = (timestamp: number): string => {
+  const date = new Date(timestamp);
+  return date.toLocaleTimeString('zh-CN', { 
+    hour: '2-digit', 
+    minute: '2-digit', 
+    second: '2-digit' 
+  });
+};
+
+// 开始拖拽
+const startDrag = (event: MouseEvent | TouchEvent) => {
+  event.preventDefault();
+  isDragging.value = true;
+  
+  const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
+  const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
+  
+  dragStartPos.value = {
+    x: clientX - historyPosition.value.x,
+    y: clientY - historyPosition.value.y
+  };
+  
+  document.addEventListener('mousemove', onDrag);
+  document.addEventListener('touchmove', onDrag);
+  document.addEventListener('mouseup', stopDrag);
+  document.addEventListener('touchend', stopDrag);
+};
+
+// 拖拽中
+const onDrag = (event: MouseEvent | TouchEvent) => {
+  if (!isDragging.value) return;
+  
+  const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
+  const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
+  
+  const newX = clientX - dragStartPos.value.x;
+  const newY = clientY - dragStartPos.value.y;
+  
+  // 限制在窗口范围内
+  const maxX = window.innerWidth - 300; // 历史记录宽度
+  const maxY = window.innerHeight - 200; // 历史记录高度
+  
+  historyPosition.value = {
+    x: Math.max(0, Math.min(newX, maxX)),
+    y: Math.max(0, Math.min(newY, maxY))
+  };
+};
+
+// 停止拖拽
+const stopDrag = () => {
+  isDragging.value = false;
+  document.removeEventListener('mousemove', onDrag);
+  document.removeEventListener('touchmove', onDrag);
+  document.removeEventListener('mouseup', stopDrag);
+  document.removeEventListener('touchend', stopDrag);
+};
+
 // 监听WebSocket翻译结果
 const handleTranslationResult = (data: any) => {
   if (data.fromUserId !== translationWebSocketService.getCurrentUserId()) {
     showSubtitle(data.data.original, data.data.translation);
+    
+    // 添加到历史记录
+    if (data.data.translation) {
+      addToHistory(data.data.translation);
+    }
+  }
+};
+
+// 监听开始翻译指令
+const handleStartTranslation = (data: any) => {
+  if (data.toUserId === translationWebSocketService.getCurrentUserId()) {
+    console.log('收到开始翻译指令，显示历史记录');
+    // 开始翻译时显示历史记录
+    showHistory.value = true;
+  }
+};
+
+// 监听停止翻译指令
+const handleStopTranslation = (data: any) => {
+  if (data.toUserId === translationWebSocketService.getCurrentUserId()) {
+    console.log('收到停止翻译指令，隐藏历史记录');
+    // 停止翻译时隐藏历史记录
+    hideHistory();
   }
 };
 
@@ -101,6 +257,8 @@ onMounted(async () => {
   
   // 注册翻译结果监听
   translationWebSocketService.on('translation_result', handleTranslationResult);
+  translationWebSocketService.on('start_translation', handleStartTranslation);
+  translationWebSocketService.on('stop_translation', handleStopTranslation);
 });
 
 onBeforeRouteLeave((to: any, from: any, next: any) => {
@@ -160,6 +318,8 @@ onUnmounted(() => {
   
   // 移除翻译结果监听
   translationWebSocketService.off('translation_result', handleTranslationResult);
+  translationWebSocketService.off('start_translation', handleStartTranslation);
+  translationWebSocketService.off('stop_translation', handleStopTranslation);
 });
 
 const goToPage = (routePath: string) => {
@@ -227,6 +387,119 @@ const goToPage = (routePath: string) => {
   opacity: 0.9;
 }
 
+/* 翻译历史记录样式 */
+.translation-history {
+  position: fixed;
+  width: 300px;
+  max-height: 200px; /* 限制高度，只显示约5条记录 */
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  z-index: 999;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  user-select: none; /* 防止拖拽时选中文字 */
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px 8px 0 0;
+  cursor: move; /* 显示拖拽光标 */
+  user-select: none;
+}
+
+.history-header:hover {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.history-title {
+  font-weight: 500;
+  font-size: 12px;
+  color: #fff;
+  pointer-events: none; /* 防止标题文字影响拖拽 */
+}
+
+.clear-history-btn {
+  background: none;
+  border: none;
+  color: #ccc;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+  pointer-events: auto; /* 确保按钮可以点击 */
+}
+
+.clear-history-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.history-content {
+  max-height: 140px; /* 限制内容区域高度 */
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.history-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.history-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.history-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+}
+
+.history-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.history-item {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background-color 0.2s;
+}
+
+.history-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-text {
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.4;
+  margin-bottom: 4px;
+  word-wrap: break-word;
+}
+
+.history-time {
+  color: #ccc;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
 @media (max-width: 768px) {
   .subtitle-container {
     bottom: 60px;
@@ -247,6 +520,12 @@ const goToPage = (routePath: string) => {
   
   .subtitle-translation {
     font-size: 12px;
+  }
+  
+  .translation-history {
+    width: calc(100vw - 20px);
+    max-width: 300px;
+    max-height: 150px;
   }
 }
 </style>
