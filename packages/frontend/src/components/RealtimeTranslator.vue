@@ -164,20 +164,46 @@ const getUserInfo = () => {
   return null;
 };
 
+// 获取房间信息
+const getRoomInfo = () => {
+  try {
+    const roomInfoStr = sessionStorage.getItem('tuiRoom-roomInfo');
+    if (roomInfoStr) {
+      const roomInfo = JSON.parse(roomInfoStr);
+      return {
+        roomId: roomInfo.roomId
+      };
+    }
+  } catch (error) {
+    console.error('获取房间信息失败:', error);
+  }
+  
+  // 如果没有房间信息，返回null
+  return null;
+};
+
 // 初始化WebSocket连接
 const initWebSocket = async () => {
   const userInfo = getUserInfo();
+  const roomInfo = getRoomInfo();
+  
   if (!userInfo) {
     console.error('无法获取用户信息，用户间通信WebSocket连接失败');
     error.value = t('Failed to get user info');
     return;
   }
+  
+  if (!roomInfo) {
+    console.error('无法获取房间信息，用户间通信WebSocket连接失败');
+    error.value = t('Failed to get room info');
+    return;
+  }
 
   try {
-    await translationWebSocketService.connect(userInfo.userId, userInfo.userName);
+    await translationWebSocketService.connect(userInfo.userId, userInfo.userName, roomInfo.roomId);
     isWebSocketConnected.value = true;
     connectionStatus.value = t('Connected');
-    console.log('用户间通信WebSocket连接成功，用户:', userInfo.userName);
+    console.log('用户间通信WebSocket连接成功，用户:', userInfo.userName, '房间:', roomInfo.roomId);
   } catch (error) {
     console.error('用户间通信WebSocket连接失败:', error);
     error.value = t('WebSocket connection failed');

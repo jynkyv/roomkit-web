@@ -5,6 +5,7 @@ export interface TranslationUser {
   id: string;
   name: string;
   isOnline: boolean;
+  roomId?: string; // 新增房间ID
 }
 
 export interface TranslationCommand {
@@ -25,6 +26,7 @@ export interface TranslationResult {
 class TranslationWebSocketService {
   private ws: WebSocket | null = null;
   private currentUserId: string = '';
+  private currentRoomId: string = ''; // 新增当前房间ID
   private users: Map<string, TranslationUser> = new Map();
   private isConnected: boolean = false;
   private reconnectAttempts: number = 0;
@@ -33,14 +35,16 @@ class TranslationWebSocketService {
   private eventListeners: Map<string, Function[]> = new Map();
 
   // 初始化WebSocket连接
-  async connect(userId: string, userName: string): Promise<void> {
+  async connect(userId: string, userName: string, roomId: string): Promise<void> {
     this.currentUserId = userId;
+    this.currentRoomId = roomId;
     
     // 添加当前用户到用户列表
     this.users.set(userId, {
       id: userId,
       name: userName,
-      isOnline: true
+      isOnline: true,
+      roomId: roomId
     });
 
     return new Promise((resolve, reject) => {
@@ -55,11 +59,12 @@ class TranslationWebSocketService {
           this.isConnected = true;
           this.reconnectAttempts = 0;
           
-          // 发送用户上线消息
+          // 发送用户上线消息，包含房间ID
           this.sendMessage({
             type: 'user_online',
             userId: userId,
-            userName: userName
+            userName: userName,
+            roomId: roomId
           });
           
           resolve();
@@ -193,9 +198,10 @@ class TranslationWebSocketService {
     this.emit('user_removed', userId);
   }
 
-  // 获取用户列表
+  // 获取用户列表（只返回同房间的用户）
   getUsers(): TranslationUser[] {
-    return Array.from(this.users.values()).filter(user => user.id !== this.currentUserId);
+    return Array.from(this.users.values())
+      .filter(user => user.id !== this.currentUserId && user.roomId === this.currentRoomId);
   }
 
   // 刷新用户列表
@@ -215,6 +221,11 @@ class TranslationWebSocketService {
     return this.currentUserId;
   }
 
+  // 获取当前房间ID
+  getCurrentRoomId(): string {
+    return this.currentRoomId;
+  }
+
   // 检查连接状态
   isWebSocketConnected(): boolean {
     return this.isConnected;
@@ -227,7 +238,7 @@ class TranslationWebSocketService {
       console.log(`尝试重连用户间通信WebSocket... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
       
       setTimeout(() => {
-        this.connect(this.currentUserId, this.users.get(this.currentUserId)?.name || 'Unknown');
+        this.connect(this.currentUserId, this.users.get(this.currentUserId)?.name || 'Unknown', this.currentRoomId);
       }, this.reconnectInterval);
     } else {
       console.error('用户间通信WebSocket重连失败，已达到最大重试次数');
@@ -252,14 +263,15 @@ class TranslationWebSocketService {
     }
   }
 
-  private emit(event: string, data: any): void {
+  // 触发事件
+  emit(event: string, data: any): void {
     const listeners = this.eventListeners.get(event);
     if (listeners) {
       listeners.forEach(callback => {
         try {
           callback(data);
         } catch (error) {
-          console.error('事件回调执行错误:', error);
+          console.error(`事件监听器执行错误 (${event}):`, error);
         }
       });
     }
@@ -268,7 +280,6 @@ class TranslationWebSocketService {
   // 断开连接
   disconnect(): void {
     if (this.ws) {
-      console.log('主动断开用户间通信WebSocket连接');
       this.ws.close();
       this.ws = null;
     }
@@ -278,5 +289,5 @@ class TranslationWebSocketService {
   }
 }
 
-// 创建单例实例
+// 导出单例实例
 export const translationWebSocketService = new TranslationWebSocketService(); 

@@ -201,6 +201,64 @@ const handleTranslationStopped = () => {
   showHistory.value = false;
 };
 
+// 初始化WebSocket连接
+const initWebSocket = async () => {
+  const userInfo = getUserInfo();
+  const roomInfo = getRoomInfo();
+  
+  if (!userInfo) {
+    console.error('无法获取用户信息，用户间通信WebSocket连接失败');
+    return;
+  }
+  
+  if (!roomInfo) {
+    console.error('无法获取房间信息，用户间通信WebSocket连接失败');
+    return;
+  }
+
+  try {
+    await translationWebSocketService.connect(userInfo.userId, userInfo.userName, roomInfo.roomId);
+    console.log('用户间通信WebSocket连接成功，用户:', userInfo.userName, '房间:', roomInfo.roomId);
+  } catch (error) {
+    console.error('用户间通信WebSocket连接失败:', error);
+  }
+};
+
+// 获取用户信息
+const getUserInfo = () => {
+  try {
+    const userInfoStr = sessionStorage.getItem('tuiRoom-userInfo');
+    if (userInfoStr) {
+      const userInfo = JSON.parse(userInfoStr);
+      return {
+        userId: userInfo.userId,
+        userName: userInfo.userName
+      };
+    }
+  } catch (error) {
+    console.error('获取用户信息失败:', error);
+  }
+  
+  return null;
+};
+
+// 获取房间信息
+const getRoomInfo = () => {
+  try {
+    const roomInfoStr = sessionStorage.getItem('tuiRoom-roomInfo');
+    if (roomInfoStr) {
+      const roomInfo = JSON.parse(roomInfoStr);
+      return {
+        roomId: roomInfo.roomId
+      };
+    }
+  } catch (error) {
+    console.error('获取房间信息失败:', error);
+  }
+  
+  return null;
+};
+
 const route = useRoute();
 const roomInfo = sessionStorage.getItem('tuiRoom-roomInfo');
 const userInfo = sessionStorage.getItem('tuiRoom-userInfo');
@@ -242,6 +300,9 @@ onMounted(async () => {
   } catch (error: any) {
     sessionStorage.removeItem('tuiRoom-currentUserInfo');
   }
+  
+  // 初始化WebSocket连接
+  await initWebSocket();
   
   // 注册翻译结果监听
   translationWebSocketService.on('translation_result', handleTranslationResult);
