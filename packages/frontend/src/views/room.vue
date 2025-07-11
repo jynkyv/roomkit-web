@@ -189,6 +189,19 @@ const handleTranslationResult = (data: any) => {
   }
 };
 
+// 监听翻译广播
+const handleTranslationBroadcast = (data: any) => {
+  console.log('收到翻译广播:', data);
+  showSubtitle(data.original, data.translation);
+  
+  // 添加到历史记录
+  if (data.translation) {
+    addToHistory(data.translation);
+    // 显示历史记录
+    showHistory.value = true;
+  }
+};
+
 // 监听翻译开始事件
 const handleTranslationStarted = () => {
   // 翻译开始时显示历史记录
@@ -199,6 +212,31 @@ const handleTranslationStarted = () => {
 const handleTranslationStopped = () => {
   // 翻译停止时隐藏历史记录
   showHistory.value = false;
+  console.log('翻译停止，隐藏翻译历史');
+};
+
+// 监听翻译状态更新
+const handleTranslationStatusUpdated = (statusMap: Record<string, any>) => {
+  console.log('翻译状态更新:', statusMap);
+  
+  // 检查当前用户是否还在查看任何翻译
+  const currentUserId = translationWebSocketService.getCurrentUserId();
+  let isViewingAnyTranslation = false;
+  
+  for (const [userId, status] of Object.entries(statusMap)) {
+    if (status.viewers && Array.isArray(status.viewers)) {
+      if (status.viewers.includes(currentUserId)) {
+        isViewingAnyTranslation = true;
+        break;
+      }
+    }
+  }
+  
+  // 如果当前用户没有在查看任何翻译，隐藏历史记录
+  if (!isViewingAnyTranslation) {
+    showHistory.value = false;
+    console.log('当前用户没有在查看任何翻译，隐藏翻译历史');
+  }
 };
 
 // 初始化WebSocket连接
@@ -215,10 +253,18 @@ const initWebSocket = async () => {
     console.error('无法获取房间信息，用户间通信WebSocket连接失败');
     return;
   }
-
+  
   try {
     await translationWebSocketService.connect(userInfo.userId, userInfo.userName, roomInfo.roomId);
-    console.log('用户间通信WebSocket连接成功，用户:', userInfo.userName, '房间:', roomInfo.roomId);
+    console.log('用户间通信WebSocket连接成功');
+    
+    // 注册事件监听器
+    translationWebSocketService.on('translation_result', handleTranslationResult);
+    translationWebSocketService.on('translation_broadcast', handleTranslationBroadcast);
+    translationWebSocketService.on('translation_started', handleTranslationStarted);
+    translationWebSocketService.on('translation_stopped', handleTranslationStopped);
+    translationWebSocketService.on('translation_status_updated', handleTranslationStatusUpdated);
+    
   } catch (error) {
     console.error('用户间通信WebSocket连接失败:', error);
   }
@@ -274,6 +320,7 @@ if (!roomId) {
   router.push({ path: 'home', query: { roomId } });
 }
 
+// 组件挂载时初始化
 onMounted(async () => {
   const { action, isSeatEnabled, roomParam, hasCreated } = JSON.parse(roomInfo as string);
   const { sdkAppId, userId, userSig, userName, avatarUrl } = JSON.parse(userInfo as string);
@@ -297,19 +344,23 @@ onMounted(async () => {
     } else {
       await conference.join(roomId, roomParam);
     }
+    
+    // 会议初始化完成后再连接WebSocket
+    await initWebSocket();
+    
   } catch (error: any) {
     sessionStorage.removeItem('tuiRoom-currentUserInfo');
+    console.error('会议初始化失败:', error);
   }
-  
-  // 初始化WebSocket连接
-  await initWebSocket();
-  
-  // 注册翻译结果监听
-  translationWebSocketService.on('translation_result', handleTranslationResult);
-  
-  // 监听翻译开始和停止事件
-  translationWebSocketService.on('translation_started', handleTranslationStarted);
-  translationWebSocketService.on('translation_stopped', handleTranslationStopped);
+});
+
+// 组件卸载时清理
+onUnmounted(() => {
+  translationWebSocketService.off('translation_result', handleTranslationResult);
+  translationWebSocketService.off('translation_broadcast', handleTranslationBroadcast);
+  translationWebSocketService.off('translation_started', handleTranslationStarted);
+  translationWebSocketService.off('translation_stopped', handleTranslationStopped);
+  translationWebSocketService.off('translation_status_updated', handleTranslationStatusUpdated);
 });
 
 onBeforeRouteLeave((to: any, from: any, next: any) => {

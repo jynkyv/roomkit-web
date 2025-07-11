@@ -297,7 +297,7 @@ const handleTranslationStopped = (userId: string) => {
     console.log(`停止对用户 ${session.targetUserName} 的翻译`);
     
     // 发送停止翻译指令给目标用户
-    translationWebSocketService.stopTranslation(userId);
+    translationWebSocketService.stopTranslationSession(sessionId);
     
     // 触发翻译停止事件，让room.vue知道翻译已停止
     translationWebSocketService.emit('translation_stopped');
@@ -660,6 +660,20 @@ const handleTranslationResult = (data: any) => {
   }
 };
 
+// 监听翻译广播（作为查看者）
+const handleTranslationBroadcast = (data: any) => {
+  console.log('收到翻译广播:', data);
+  
+  // 添加到翻译结果
+  websocketTranslationResults.value.push({
+    original: data.original,
+    translation: data.translation,
+    timestamp: data.timestamp,
+  });
+  
+  console.log('收到翻译广播结果:', data);
+};
+
 // 监听开始翻译指令（作为被翻译的用户）
 const handleStartTranslation = (data: any) => {
   if (data.toUserId === translationWebSocketService.getCurrentUserId()) {
@@ -715,6 +729,7 @@ const handleStopTranslation = (data: any) => {
 // 组件挂载时注册事件监听器
 const setupWebSocketListeners = () => {
   translationWebSocketService.on('translation_result', handleTranslationResult);
+  translationWebSocketService.on('translation_broadcast', handleTranslationBroadcast);
   translationWebSocketService.on('start_translation', handleStartTranslation);
   translationWebSocketService.on('stop_translation', handleStopTranslation);
 };
@@ -742,6 +757,7 @@ onUnmounted(() => {
   // 让它们继续运行，直到目标用户主动停止
   
   translationWebSocketService.off('translation_result', handleTranslationResult);
+  translationWebSocketService.off('translation_broadcast', handleTranslationBroadcast);
   translationWebSocketService.off('start_translation', handleStartTranslation);
   translationWebSocketService.off('stop_translation', handleStopTranslation);
   
@@ -751,14 +767,14 @@ onUnmounted(() => {
 
 // 发送翻译结果给所有正在请求我的用户
 const sendTranslationResultsToAll = (original: string, translation: string) => {
+  // 获取当前用户的翻译会话
+  const currentUserId = translationWebSocketService.getCurrentUserId();
+  const currentRoomId = translationWebSocketService.getCurrentRoomId();
+  
+  // 查找当前用户正在被翻译的会话
   for (const [fromUserId, session] of activeIncomingSessions.value.entries()) {
-    translationWebSocketService.sendTranslationResult(fromUserId, {
-      original,
-      translation,
-      timestamp: Date.now(),
-      fromUserId: translationWebSocketService.getCurrentUserId(),
-      toUserId: fromUserId,
-    });
+    const sessionId = `${currentRoomId}_${fromUserId}_${currentUserId}`;
+    translationWebSocketService.sendTranslationResult(sessionId, original, translation);
   }
 };
 </script>
