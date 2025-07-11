@@ -25,7 +25,7 @@
         @touchstart="startDrag"
       >
         <span class="history-title">{{ t('Translation History') }}</span>
-        <button class="clear-history-btn" @click="clearHistory" title="Clear history">
+        <button class="clear-history-btn" @click="clearHistory" :title="t('Clear history')">
           ×
         </button>
       </div>

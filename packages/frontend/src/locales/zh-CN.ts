@@ -47,6 +47,10 @@ export default {
   'Offline': '离线',
   'Start translation': '开始翻译',
   'Stop translation': '停止翻译',
+  'View translation': '查看翻译',
+  'Stop viewing': '停止查看',
+  'Translating': '正在翻译',
+  'You initiated': '您发起的',
   // 实时翻译器翻译
   'Translation': '翻译',
   'Connected': '已连接',
@@ -66,4 +70,6 @@ export default {
   'Failed to get user info': '无法获取用户信息',
   'WebSocket connection failed': 'WebSocket连接失败',
   'Unknown error': '未知错误',
+  'Translation History': '翻译历史',
+  'Clear history': '清除历史',
 };

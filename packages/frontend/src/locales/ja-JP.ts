@@ -47,6 +47,10 @@ export default {
   'Offline': 'オフライン',
   'Start translation': '翻訳開始',
   'Stop translation': '翻訳停止',
+  'View translation': '翻訳を表示',
+  'Stop viewing': '表示停止',
+  'Translating': '翻訳中',
+  'You initiated': 'あなたが開始',
   // リアルタイム翻訳器の翻訳
   'Translation': '翻訳',
   'Connected': '接続済み',
@@ -66,4 +70,7 @@ export default {
   'Failed to get user info': 'ユーザー情報の取得に失敗しました',
   'WebSocket connection failed': 'WebSocket接続に失敗しました',
   'Unknown error': '不明なエラー',
+  // 翻訳履歴パネルの翻訳
+  'Translation History': '翻訳履歴',
+  'Clear history': '履歴をクリア',
 }; 

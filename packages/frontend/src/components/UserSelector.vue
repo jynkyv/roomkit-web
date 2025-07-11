@@ -199,9 +199,8 @@ const isCurrentUserViewing = (userId: string): boolean => {
 // 获取语言显示名称
 const getLangDisplay = (langCode: string): string => {
   const langMap: Record<string, string> = {
-    'zh-CHS': '中文',
-    'ja': '日文',
-    'en': '英文'
+    'zh-CHS': t('Chinese'),
+    'ja': t('Japanese'),
   };
   return langMap[langCode] || langCode;
 };
