@@ -68,7 +68,7 @@ const translationHistory = ref<Array<{
 }>>([]);
 
 // 控制历史记录显示状态
-const showHistory = ref(false);
+const showHistory = ref(true);
 
 // 拖拽相关状态
 const historyRef = ref<HTMLElement | null>(null);
@@ -109,20 +109,12 @@ const addToHistory = (translation: string) => {
   if (translationHistory.value.length > 100) {
     translationHistory.value = translationHistory.value.slice(0, 100);
   }
-  
-  // 显示历史记录
-  showHistory.value = true;
 };
 
 // 清空历史记录
 const clearHistory = () => {
   translationHistory.value = [];
-  showHistory.value = false;
-};
-
-// 隐藏历史记录
-const hideHistory = () => {
-  showHistory.value = false;
+  showHistory.value = false; // 清空时也隐藏历史记录
 };
 
 // 格式化时间
@@ -191,26 +183,22 @@ const handleTranslationResult = (data: any) => {
     // 添加到历史记录
     if (data.data.translation) {
       addToHistory(data.data.translation);
+      // 显示历史记录
+      showHistory.value = true;
     }
   }
 };
 
-// 监听开始翻译指令
-const handleStartTranslation = (data: any) => {
-  if (data.toUserId === translationWebSocketService.getCurrentUserId()) {
-    console.log('收到开始翻译指令，显示历史记录');
-    // 开始翻译时显示历史记录
-    showHistory.value = true;
-  }
+// 监听翻译开始事件
+const handleTranslationStarted = () => {
+  // 翻译开始时显示历史记录
+  showHistory.value = true;
 };
 
-// 监听停止翻译指令
-const handleStopTranslation = (data: any) => {
-  if (data.toUserId === translationWebSocketService.getCurrentUserId()) {
-    console.log('收到停止翻译指令，隐藏历史记录');
-    // 停止翻译时隐藏历史记录
-    hideHistory();
-  }
+// 监听翻译停止事件
+const handleTranslationStopped = () => {
+  // 翻译停止时隐藏历史记录
+  showHistory.value = false;
 };
 
 const route = useRoute();
@@ -257,8 +245,10 @@ onMounted(async () => {
   
   // 注册翻译结果监听
   translationWebSocketService.on('translation_result', handleTranslationResult);
-  translationWebSocketService.on('start_translation', handleStartTranslation);
-  translationWebSocketService.on('stop_translation', handleStopTranslation);
+  
+  // 监听翻译开始和停止事件
+  translationWebSocketService.on('translation_started', handleTranslationStarted);
+  translationWebSocketService.on('translation_stopped', handleTranslationStopped);
 });
 
 onBeforeRouteLeave((to: any, from: any, next: any) => {
@@ -318,8 +308,8 @@ onUnmounted(() => {
   
   // 移除翻译结果监听
   translationWebSocketService.off('translation_result', handleTranslationResult);
-  translationWebSocketService.off('start_translation', handleStartTranslation);
-  translationWebSocketService.off('stop_translation', handleStopTranslation);
+  translationWebSocketService.off('translation_started', handleTranslationStarted);
+  translationWebSocketService.off('translation_stopped', handleTranslationStopped);
 });
 
 const goToPage = (routePath: string) => {

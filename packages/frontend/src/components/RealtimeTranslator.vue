@@ -253,6 +253,9 @@ const handleTranslationStarted = (userId: string, userName: string) => {
   // 作为发起者，只发送指令，不录音
   connectionStatus.value = t('Waiting for target user to start translation...');
   console.log(`发送翻译指令给用户: ${userName} (${userId})`);
+  
+  // 触发翻译开始事件，让room.vue知道翻译已开始
+  translationWebSocketService.emit('translation_started');
 };
 
 // 处理翻译停止（作为发起者停止对目标用户的翻译）
@@ -269,6 +272,9 @@ const handleTranslationStopped = (userId: string) => {
     
     // 发送停止翻译指令给目标用户
     translationWebSocketService.stopTranslation(userId);
+    
+    // 触发翻译停止事件，让room.vue知道翻译已停止
+    translationWebSocketService.emit('translation_stopped');
   } else {
     // 如果不是发起者，说明是用户主动停止，不需要发送停止指令
     console.log('用户主动停止翻译，不发送停止指令');
@@ -276,6 +282,9 @@ const handleTranslationStopped = (userId: string) => {
     activeTranslationSessions.value.delete(sessionId);
     currentTargetUser.value = null;
     isInitiating.value = false;
+    
+    // 触发翻译停止事件
+    translationWebSocketService.emit('translation_stopped');
   }
 };
 
