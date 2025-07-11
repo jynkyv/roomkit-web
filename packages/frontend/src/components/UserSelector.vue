@@ -96,7 +96,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { translationWebSocketService, type TranslationUser } from '../services/translationWebSocket';
 import { useI18n } from '../locales';
 
@@ -126,6 +126,23 @@ const selectedUserId = ref<string>('');
 const activeTranslations = ref<Set<string>>(new Set());
 const isLoading = ref(false);
 
+// 记录当前用户正在查看的所有 userId
+const viewingUserIds = computed(() =>
+  users.value
+    .filter(user => isCurrentUserViewing(user.id))
+    .map(user => user.id)
+);
+
+// 监听 showSelector 变为 false 时自动 leave
+watch(
+  () => props.showSelector,
+  (val) => {
+    if (!val) {
+      viewingUserIds.value.forEach(uid => leaveTranslationView(uid));
+    }
+  }
+);
+
 // 获取用户列表
 const refreshUsers = () => {
   isLoading.value = true;
@@ -153,7 +170,7 @@ const refreshUsers = () => {
   setTimeout(() => {
     isLoading.value = false;
     console.log('刷新用户列表完成');
-  }, 1000);
+  }, 2000); // 增加到2秒，给更多响应时间
 };
 
 // 选择用户
@@ -343,6 +360,10 @@ const handleUserListUpdated = (userList: TranslationUser[]) => {
       console.log(`用户 ${user.name} 翻译状态:`, user.translationStatus);
     }
   });
+  
+  // 用户列表更新后，重置loading状态
+  isLoading.value = false;
+  console.log('用户列表更新完成，重置loading状态');
 };
 
 const handleUserAdded = (user: TranslationUser) => {
@@ -381,6 +402,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  viewingUserIds.value.forEach(uid => leaveTranslationView(uid));
   // 移除事件监听器
   translationWebSocketService.off('user_list_updated', handleUserListUpdated);
   translationWebSocketService.off('user_added', handleUserAdded);

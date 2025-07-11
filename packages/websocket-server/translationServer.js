@@ -375,7 +375,14 @@ wss.on('connection', (ws, req) => {
         // 清除翻译状态
         clearUserTranslationStatus(currentRoomId, session.targetUserId);
       });
-      
+
+      // 新增：清理所有会话的viewers中该用户
+      for (const [sessionId, session] of translationSessions.entries()) {
+        if (session.viewers.has(currentUserId)) {
+          session.viewers.delete(currentUserId);
+        }
+      }
+
       // 从房间中移除用户
       if (currentRoomId && rooms.has(currentRoomId)) {
         rooms.get(currentRoomId).delete(currentUserId);
@@ -443,6 +450,13 @@ setInterval(() => {
           clearUserTranslationStatus(roomIdToUpdate, session.targetUserId);
         });
         
+        // 新增：清理所有会话的viewers中该用户
+        for (const [sessionId, session] of translationSessions.entries()) {
+          if (session.viewers.has(userIdToRemove)) {
+            session.viewers.delete(userIdToRemove);
+          }
+        }
+
         // 从房间中移除用户
         if (roomIdToUpdate && rooms.has(roomIdToUpdate)) {
           rooms.get(roomIdToUpdate).delete(userIdToRemove);
