@@ -73,4 +73,5 @@ export default {
   // 翻訳履歴パネルの翻訳
   'Translation History': '翻訳履歴',
   'Clear history': '履歴をクリア',
+  'Viewing': '表示中',
 }; 

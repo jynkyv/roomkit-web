@@ -45,7 +45,7 @@
               <!-- 查看者信息 -->
               <div v-if="user.translationStatus.viewers && user.translationStatus.viewers.length > 0" class="viewers-info">
                 <span class="viewers-icon">●</span>
-                <span class="viewers-count">{{ user.translationStatus.viewers.length }} {{ t('viewing') }}</span>
+                <span class="viewers-count">{{ user.translationStatus.viewers.length }} {{ t('Viewing') }}</span>
               </div>
             </div>
           </div>

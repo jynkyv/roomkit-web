@@ -72,4 +72,5 @@ export default {
   'Unknown error': '未知错误',
   'Translation History': '翻译历史',
   'Clear history': '清除历史',
+  'Viewing': '正在查看',
 };
