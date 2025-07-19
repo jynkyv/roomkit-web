@@ -1,4 +1,4 @@
-import { createRouter, createWebHashHistory } from 'vue-router';
+import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 
 const routes = [
@@ -23,7 +23,7 @@ const routes = [
 ];
 
 const router = createRouter({
-  history: createWebHashHistory(),
+  history: createWebHistory(),
   routes,
 });
 
@@ -43,9 +43,9 @@ router.beforeEach(async (to, from, next) => {
       await authStore.initAuth();
     }
     
-    // 如果未登录，重定向到登录页
+    // 如果未登录，重定向到登录页并带上redirect参数
     if (!authStore.isAuthenticated) {
-      next('/login');
+      next(`/login?redirect=${encodeURIComponent(to.fullPath)}`);
       return;
     }
   }

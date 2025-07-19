@@ -58,13 +58,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useI18n } from '../locales/index'
 import i18n from '../locales/index'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const { t } = useI18n()
 
@@ -84,10 +85,35 @@ const switchLanguage = () => {
   localStorage.setItem('tuiRoom-language', newLang)
 }
 
+const pendingRoomId = ref<string | null>(null)
+
+onMounted(() => {
+  // 检查URL参数
+  const url = new URL(window.location.href)
+  const roomId = url.searchParams.get('roomId')
+  if (roomId) {
+    pendingRoomId.value = roomId
+    localStorage.setItem('pendingRoomId', roomId)
+  }
+})
+
 const handleLogin = async () => {
   const success = await authStore.login(email.value, password.value)
   if (success) {
-    router.push('/home')
+    // 优先跳转到redirect参数
+    const redirect = route.query.redirect as string
+    if (redirect) {
+      window.location.href = redirect
+      return
+    }
+    // 其次跳转到roomId
+    const cachedRoomId = localStorage.getItem('pendingRoomId')
+    if (cachedRoomId) {
+      localStorage.removeItem('pendingRoomId')
+      router.push(`/room?roomId=${encodeURIComponent(cachedRoomId)}`)
+    } else {
+      router.push('/home')
+    }
   }
 }
 </script>
