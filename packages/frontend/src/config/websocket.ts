@@ -14,13 +14,5 @@ export const WEBSOCKET_CONFIG = {
 export function getWebSocketUrl(): string {
   const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const config = isDevelopment ? WEBSOCKET_CONFIG.development : WEBSOCKET_CONFIG.production;
-  
-  // 添加调试信息
-  console.log('WebSocket配置:', {
-    isDevelopment,
-    hostname: window.location.hostname,
-    url: config.url
-  });
-  
   return config.url;
 } 
