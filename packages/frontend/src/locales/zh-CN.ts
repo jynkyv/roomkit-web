@@ -73,4 +73,13 @@ export default {
   'Translation History': '翻译历史',
   'Clear history': '清除历史',
   'Viewing': '正在查看',
+  // WebSocket连接错误提示
+  'Connection Error': '连接错误',
+  'WebSocket connection failed. This may be due to browser cache issues.': 'WebSocket连接失败，这可能是由于浏览器缓存问题导致的。',
+  'Please try the following solutions:': '请尝试以下解决方案：',
+  '1. Clear browser cache and refresh the page': '1. 清除浏览器缓存并刷新页面',
+  '2. Try using incognito/private browsing mode': '2. 尝试使用无痕/隐私浏览模式',
+  '3. Restart the browser': '3. 重启浏览器',
+  'Clear Cache & Retry': '清除缓存并重试',
+  'Dismiss': '忽略',
 };

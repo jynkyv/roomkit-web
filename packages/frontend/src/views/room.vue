@@ -2,6 +2,32 @@
   <div class="room-container">
     <conference-main-view display-mode="permanent"></conference-main-view>
 
+    <!-- WebSocket连接错误提示 -->
+    <div v-if="showWebSocketError" class="websocket-error-overlay">
+      <div class="websocket-error-modal">
+        <div class="error-header">
+          <h3>{{ t('Connection Error') }}</h3>
+        </div>
+        <div class="error-content">
+          <p>{{ t('WebSocket connection failed. This may be due to browser cache issues.') }}</p>
+          <p>{{ t('Please try the following solutions:') }}</p>
+          <ul>
+            <li>{{ t('1. Clear browser cache and refresh the page') }}</li>
+            <li>{{ t('2. Try using incognito/private browsing mode') }}</li>
+            <li>{{ t('3. Restart the browser') }}</li>
+          </ul>
+        </div>
+        <div class="error-actions">
+          <button @click="clearCacheAndRetry" class="btn-retry">
+            {{ t('Clear Cache & Retry') }}
+          </button>
+          <button @click="dismissError" class="btn-dismiss">
+            {{ t('Dismiss') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 只保留字幕显示，翻译控制已集成到底部控制栏 -->
     <div class="subtitle-container" v-if="currentSubtitle">
       <div class="subtitle-content">
@@ -49,7 +75,7 @@ import { ConferenceMainView, conference, RoomEvent, LanguageOption, ThemeOption 
 import { onBeforeRouteLeave, useRoute } from 'vue-router';
 import router from '../router/index';
 import i18n, { useI18n } from '../locales/index';
-import { getLanguage, getTheme } from  '../utils/utils';
+import { getLanguage, getTheme, clearBrowserCache, checkAndFixWebSocketConnection } from  '../utils/utils';
 import { useUIKit } from '@tencentcloud/uikit-base-component-vue3';
 import { translationWebSocketService } from '../services/translationWebSocket';
 
@@ -75,6 +101,9 @@ const historyRef = ref<HTMLElement | null>(null);
 const isDragging = ref(false);
 const dragStartPos = ref({ x: 0, y: 0 });
 const historyPosition = ref({ x: 420, y: 20 }); // 初始位置
+
+// WebSocket连接错误提示状态
+const showWebSocketError = ref(false);
 
 // 新字幕到来时显示并自动淡出
 const showSubtitle = (original: string, translation: string) => {
@@ -239,34 +268,101 @@ const handleTranslationStatusUpdated = (statusMap: Record<string, any>) => {
   }
 };
 
+// 显示WebSocket连接错误提示
+const showWebSocketErrorModal = () => {
+  showWebSocketError.value = true;
+  
+  // 输出调试信息到控制台
+  console.log('=== WebSocket连接问题诊断信息 ===');
+  console.log('当前URL:', window.location.href);
+  console.log('User Agent:', navigator.userAgent);
+  console.log('sessionStorage内容:');
+  for (let i = 0; i < sessionStorage.length; i++) {
+    const key = sessionStorage.key(i);
+    if (key) {
+      console.log(`  ${key}:`, sessionStorage.getItem(key));
+    }
+  }
+  console.log('localStorage内容:');
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key) {
+      console.log(`  ${key}:`, localStorage.getItem(key));
+    }
+  }
+  console.log('=== 诊断信息结束 ===');
+};
+
+// 清除缓存并重试WebSocket连接
+const clearCacheAndRetry = () => {
+  clearBrowserCache();
+  showWebSocketError.value = false;
+  initWebSocket(); // 重新尝试连接
+};
+
+// 关闭WebSocket连接错误提示
+const dismissError = () => {
+  showWebSocketError.value = false;
+};
+
 // 初始化WebSocket连接
 const initWebSocket = async () => {
+  console.log('开始初始化WebSocket连接...');
+  
+  // 重新获取用户信息，确保是最新的
   const userInfo = getUserInfo();
   const roomInfo = getRoomInfo();
   
+  console.log('获取到的用户信息:', userInfo);
+  console.log('获取到的房间信息:', roomInfo);
+  
   if (!userInfo) {
     console.error('无法获取用户信息，用户间通信WebSocket连接失败');
+    console.error('sessionStorage中的tuiRoom-userInfo:', sessionStorage.getItem('tuiRoom-userInfo'));
+    showWebSocketErrorModal(); // 显示错误提示
     return;
   }
   
   if (!roomInfo) {
     console.error('无法获取房间信息，用户间通信WebSocket连接失败');
+    console.error('sessionStorage中的tuiRoom-roomInfo:', sessionStorage.getItem('tuiRoom-roomInfo'));
+    showWebSocketErrorModal(); // 显示错误提示
     return;
   }
   
-  try {
-    await translationWebSocketService.connect(userInfo.userId, userInfo.userName, roomInfo.roomId);
-    console.log('用户间通信WebSocket连接成功');
-    
-    // 注册事件监听器
-    translationWebSocketService.on('translation_result', handleTranslationResult);
-    translationWebSocketService.on('translation_broadcast', handleTranslationBroadcast);
-    translationWebSocketService.on('translation_started', handleTranslationStarted);
-    translationWebSocketService.on('translation_stopped', handleTranslationStopped);
-    translationWebSocketService.on('translation_status_updated', handleTranslationStatusUpdated);
-    
-  } catch (error) {
-    console.error('用户间通信WebSocket连接失败:', error);
+  // 添加重试机制
+  let retryCount = 0;
+  const maxRetries = 3;
+  
+  while (retryCount < maxRetries) {
+    try {
+      console.log(`尝试连接WebSocket (第${retryCount + 1}次)...`);
+      await translationWebSocketService.connect(userInfo.userId, userInfo.userName, roomInfo.roomId);
+      console.log('用户间通信WebSocket连接成功');
+      
+      // 注册事件监听器
+      translationWebSocketService.on('translation_result', handleTranslationResult);
+      translationWebSocketService.on('translation_broadcast', handleTranslationBroadcast);
+      translationWebSocketService.on('translation_started', handleTranslationStarted);
+      translationWebSocketService.on('translation_stopped', handleTranslationStopped);
+      translationWebSocketService.on('translation_status_updated', handleTranslationStatusUpdated);
+      
+      return; // 连接成功，退出重试循环
+      
+    } catch (error) {
+      retryCount++;
+      console.error(`WebSocket连接失败 (第${retryCount}次):`, error);
+      
+      if (retryCount >= maxRetries) {
+        console.error('WebSocket连接失败，已达到最大重试次数');
+        showWebSocketErrorModal(); // 显示错误提示
+        return;
+      }
+      
+      // 等待一段时间后重试
+      console.log(`等待${retryCount * 1000}ms后重试...`);
+      await new Promise(resolve => setTimeout(resolve, retryCount * 1000));
+    }
   }
 };
 
@@ -305,6 +401,41 @@ const getRoomInfo = () => {
   return null;
 };
 
+// 清理可能冲突的用户信息
+const cleanupUserInfo = () => {
+  console.log('开始清理用户信息...');
+  
+  // 检查WebSocket连接状态
+  const isConnectionValid = checkAndFixWebSocketConnection();
+  
+  if (!isConnectionValid) {
+    console.warn('检测到WebSocket连接问题，执行完整缓存清理...');
+    clearBrowserCache();
+  } else {
+    console.log('WebSocket连接状态正常，执行基础清理...');
+    
+    // 只清理可能冲突的项
+    const keysToClean = [
+      'tuiRoom-currentUserInfo',
+      'pendingRoomId'
+    ];
+    
+    keysToClean.forEach(key => {
+      try {
+        const value = sessionStorage.getItem(key);
+        if (value) {
+          console.log(`清理存储项 ${key}:`, value);
+          sessionStorage.removeItem(key);
+        }
+      } catch (error) {
+        console.error(`清理存储项 ${key} 失败:`, error);
+      }
+    });
+  }
+  
+  console.log('用户信息清理完成');
+};
+
 const route = useRoute();
 const roomInfo = sessionStorage.getItem('tuiRoom-roomInfo');
 const userInfo = sessionStorage.getItem('tuiRoom-userInfo');
@@ -322,6 +453,9 @@ if (!roomId) {
 
 // 组件挂载时初始化
 onMounted(async () => {
+  // 先清理可能冲突的用户信息
+  cleanupUserInfo();
+  
   const { action, isSeatEnabled, roomParam, hasCreated } = JSON.parse(roomInfo as string);
   const { sdkAppId, userId, userSig, userName, avatarUrl } = JSON.parse(userInfo as string);
   if (action === 'createRoom') {
@@ -444,6 +578,91 @@ const goToPage = (routePath: string) => {
   position: relative;
   width: 100%;
   height: 100%;
+}
+
+/* WebSocket连接错误提示样式 */
+.websocket-error-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.websocket-error-modal {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  max-width: 400px;
+  width: 90%;
+}
+
+.error-header h3 {
+  color: #333;
+  margin-bottom: 10px;
+  font-size: 20px;
+}
+
+.error-content p {
+  color: #555;
+  font-size: 14px;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.error-content ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px 0;
+  text-align: left;
+}
+
+.error-content ul li {
+  color: #666;
+  font-size: 13px;
+  margin-bottom: 5px;
+  line-height: 1.4;
+}
+
+.error-actions {
+  display: flex;
+  justify-content: space-around;
+  gap: 10px;
+}
+
+.btn-retry, .btn-dismiss {
+  padding: 8px 15px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  transition: background-color 0.3s ease;
+}
+
+.btn-retry {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.btn-retry:hover {
+  background-color: #388E3C;
+}
+
+.btn-dismiss {
+  background-color: #f44336;
+  color: white;
+}
+
+.btn-dismiss:hover {
+  background-color: #D32F2F;
 }
 
 /* 字幕样式 */

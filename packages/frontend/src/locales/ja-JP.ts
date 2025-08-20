@@ -74,4 +74,13 @@ export default {
   'Translation History': '翻訳履歴',
   'Clear history': '履歴をクリア',
   'Viewing': '表示中',
+  // WebSocket接続エラー通知
+  'Connection Error': '接続エラー',
+  'WebSocket connection failed. This may be due to browser cache issues.': 'WebSocket接続に失敗しました。これはブラウザのキャッシュの問題が原因である可能性があります。',
+  'Please try the following solutions:': '以下の解決策を試してください：',
+  '1. Clear browser cache and refresh the page': '1. ブラウザのキャッシュをクリアしてページを更新',
+  '2. Try using incognito/private browsing mode': '2. シークレット/プライベートブラウジングモードを試す',
+  '3. Restart the browser': '3. ブラウザを再起動',
+  'Clear Cache & Retry': 'キャッシュをクリアして再試行',
+  'Dismiss': '無視',
 }; 
