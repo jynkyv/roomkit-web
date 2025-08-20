@@ -219,12 +219,13 @@ class TranslationWebSocketService {
   }
 
   // 发送翻译结果
-  sendTranslationResult(sessionId: string, original: string, translation: string): void {
+  sendTranslationResult(sessionId: string, original: string, translation: string, fromUserId: string): void {
     this.sendMessage({
       type: 'translation_result',
       sessionId,
       original,
-      translation
+      translation,
+      fromUserId
     });
   }
 

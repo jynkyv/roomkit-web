@@ -774,7 +774,7 @@ const sendTranslationResultsToAll = (original: string, translation: string) => {
   // 查找当前用户正在被翻译的会话
   for (const [fromUserId, session] of activeIncomingSessions.value.entries()) {
     const sessionId = `${currentRoomId}_${fromUserId}_${currentUserId}`;
-    translationWebSocketService.sendTranslationResult(sessionId, original, translation);
+    translationWebSocketService.sendTranslationResult(sessionId, original, translation, currentUserId);
   }
 };
 </script>

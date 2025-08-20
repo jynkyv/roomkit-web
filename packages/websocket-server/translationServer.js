@@ -304,12 +304,17 @@ wss.on('connection', (ws, req) => {
           
         case 'translation_result':
           // 翻译结果广播
-          const { sessionId: resultSessionId, original, translation } = data;
+          const { sessionId: resultSessionId, original, translation, fromUserId } = data;
           const resultSession = translationSessions.get(resultSessionId);
           
           if (resultSession && resultSession.isActive) {
-            // 向所有查看者广播翻译结果
+            // 向所有查看者广播翻译结果，但排除说话者本人
             resultSession.viewers.forEach(viewerId => {
+              // 跳过说话者本人，避免自己看到自己的翻译
+              if (viewerId === fromUserId) {
+                return;
+              }
+              
               const viewerClient = clients.get(viewerId);
               if (viewerClient && viewerClient.ws.readyState === WebSocket.OPEN) {
                 viewerClient.ws.send(JSON.stringify({
