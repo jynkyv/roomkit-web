@@ -942,7 +942,7 @@ const sendTranslationResultsToAll = (original: string, translation: string) => {
 .translation-history {
   position: fixed;
   width: 300px;
-  max-height: 200px; /* 限制高度，只显示约5条记录 */
+  max-height: 400px; /* 限制高度，只显示约5条记录 */
   background: rgba(0, 0, 0, 0.7);
   border-radius: 8px;
   backdrop-filter: blur(10px);
