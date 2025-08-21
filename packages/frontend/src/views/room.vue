@@ -770,7 +770,7 @@ const goToPage = (routePath: string) => {
 }
 
 .history-content {
-  max-height: 140px; /* 限制内容区域高度 */
+  max-height: 340px;
   overflow-y: auto;
   padding: 8px 0;
 }
