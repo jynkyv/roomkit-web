@@ -275,15 +275,31 @@ class TranslationWebSocketService {
   // 更新用户列表
   private updateUserList(users: TranslationUser[]): void {
     this.users.clear();
+    
+    // 同步更新翻译状态
+    this.userTranslationStatus.clear();
+    
     users.forEach(user => {
       this.users.set(user.id, user);
+      
+      // 如果用户有翻译状态，同步到userTranslationStatus
+      if (user.translationStatus) {
+        this.userTranslationStatus.set(user.id, user.translationStatus);
+      }
     });
+    
     this.emit('user_list_updated', Array.from(this.users.values()));
   }
 
   // 添加用户
   private addUser(user: TranslationUser): void {
     this.users.set(user.id, user);
+    
+    // 如果用户有翻译状态，同步到userTranslationStatus
+    if (user.translationStatus) {
+      this.userTranslationStatus.set(user.id, user.translationStatus);
+    }
+    
     this.emit('user_added', user);
   }
 

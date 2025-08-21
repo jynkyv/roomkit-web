@@ -186,7 +186,15 @@ const getSelectedUserName = (): string => {
 
 // 检查用户是否正在被翻译
 const isUserBeingTranslated = (userId: string): boolean => {
-  return translationWebSocketService.isUserBeingTranslated(userId);
+  const result = translationWebSocketService.isUserBeingTranslated(userId);
+  const user = users.value.find(u => u.id === userId);
+  console.log(`检查用户 ${user?.name || userId} 翻译状态:`, {
+    userId,
+    result,
+    userTranslationStatus: user?.translationStatus,
+    serviceStatus: translationWebSocketService.getUserTranslationStatus(userId)
+  });
+  return result;
 };
 
 // 检查当前用户是否是翻译发起者
