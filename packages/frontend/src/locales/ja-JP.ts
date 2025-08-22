@@ -62,6 +62,7 @@ export default {
   'Select translation target': '翻訳対象を選択',
   'Waiting for target user to start translation...': '対象ユーザーの翻訳開始を待機中...',
   'Recording...': '翻訳中...',
+  'Streaming translation...': 'ストリーミング翻訳中...',
   'Connection failed': '接続失敗',
   'Connection error': '接続エラー',
   'Connection closed': '接続が閉じられました',
@@ -74,6 +75,10 @@ export default {
   'Translation History': '翻訳履歴',
   'Clear history': '履歴をクリア',
   'Viewing': '表示中',
+  'No translation history yet': '翻訳履歴がまだありません',
+  'Just now': '今',
+  'min ago': '分前',
+  'h ago': '時間前',
   // WebSocket接続エラー通知
   'Connection Error': '接続エラー',
   'WebSocket connection failed. This may be due to browser cache issues.': 'WebSocket接続に失敗しました。これはブラウザのキャッシュの問題が原因である可能性があります。',

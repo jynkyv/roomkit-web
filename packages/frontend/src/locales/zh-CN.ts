@@ -37,6 +37,7 @@ export default {
   'This action causes the room to be exited, does it continue?': '该操作会导致退出房间，是否继续？',
   'This action causes the room to be disbanded, does it continue?': '该操作会导致解散房间，是否继续？',
   'Quick Conference': '的快速会议',
+  
   // 用户选择器翻译
   'Select user to translate': '选择要翻译的用户',
   'Refresh': '刷新',
@@ -51,6 +52,7 @@ export default {
   'Stop viewing': '停止查看',
   'Translating': '正在翻译',
   'You initiated': '您发起的',
+  
   // 实时翻译器翻译
   'Translation': '翻译',
   'Connected': '已连接',
@@ -62,6 +64,7 @@ export default {
   'Select translation target': '选择翻译目标',
   'Waiting for target user to start translation...': '等待目标用户开始翻译...',
   'Recording...': '翻译中...',
+  'Streaming translation...': '流式翻译中...',
   'Connection failed': '连接失败',
   'Connection error': '连接错误',
   'Connection closed': '连接已关闭',
@@ -73,6 +76,7 @@ export default {
   'Translation History': '翻译历史',
   'Clear history': '清除历史',
   'Viewing': '正在查看',
+  
   // WebSocket连接错误提示
   'Connection Error': '连接错误',
   'WebSocket connection failed. This may be due to browser cache issues.': 'WebSocket连接失败，这可能是由于浏览器缓存问题导致的。',
@@ -82,4 +86,48 @@ export default {
   '3. Restart the browser': '3. 重启浏览器',
   'Clear Cache & Retry': '清除缓存并重试',
   'Dismiss': '忽略',
+  
+  // 语言配置相关
+  'Language Configuration Required': '需要语言配置',
+  'Please configure your translation language settings': '请配置您的翻译语言设置',
+  'Configure Language': '配置语言',
+  'Translation Language Settings': '翻译语言设置',
+  'Configure your source and target languages for translation': '配置您的源语言和目标语言',
+  'I speak': '我说',
+  'I want to translate to': '我想翻译成',
+  'Save Configuration': '保存配置',
+  'Cancel': '取消',
+  'Change': '更改',
+  
+  // 翻译结果和字幕
+  'Translation Results': '翻译结果',
+  'Live Subtitles': '实时字幕',
+  'Start': '开始',
+  'Stop': '停止',
+  'Show History': '显示历史',
+  'Hide History': '隐藏历史',
+  'Clear': '清空',
+  'No translation history': '暂无翻译历史',
+  'No translation history yet': '暂无翻译历史记录',
+  'Just now': '刚刚',
+  'min ago': '分钟前',
+  'h ago': '小时前',
+  
+  // 在线用户
+  'Online Users': '在线用户',
+  'WebSocket not connected': 'WebSocket未连接',
+  'No users online': '没有在线用户',
+  
+  // 错误信息
+  'Failed to start translation': '启动翻译失败',
+  'WebSocket error': 'WebSocket错误',
+  'Failed to connect to translation service': '连接翻译服务失败',
+  'Connection Failed': '连接失败',
+  'Reconnecting': '重连中',
+  'Connection failed after multiple attempts': '多次重连失败',
+  'WebSocket connection timeout': 'WebSocket连接超时',
+  'Connection lost': '连接丢失',
+  'Attempting to reconnect': '正在尝试重连',
+  'Reconnection successful': '重连成功',
+  'Reconnection failed': '重连失败',
 };
