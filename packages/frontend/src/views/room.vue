@@ -1,6 +1,44 @@
 <template>
-  <div class="room-container">
-    <conference-main-view display-mode="permanent"></conference-main-view>
+  <div class="room-container" :class="{ 'with-history': showHistoryPanel }">
+    <!-- 左侧会议内容 -->
+    <div class="room-content">
+      <!-- 现有的房间组件 -->
+      <conference-main-view display-mode="permanent"></conference-main-view>
+    </div>
+    
+    <!-- 右侧翻译历史面板 -->
+    <div v-show="showHistoryPanel" class="history-panel">
+      <div class="panel-header">
+        <div class="header-tabs">
+          <div class="tab active">{{ t('Translation History') }}</div>
+        </div>
+        <div class="header-actions">
+          <button class="clear-btn" @click="clearHistory" :title="t('Clear history')">
+            <span class="clear-icon">🗑️</span>
+          </button>
+          <button class="close-btn" @click="toggleHistoryPanel">×</button>
+        </div>
+      </div>
+      
+      <div class="panel-content">
+        <div v-if="translationHistory.length === 0" class="empty-history">
+          <div class="empty-icon">📝</div>
+          <p>{{ t('No translation history yet') }}</p>
+        </div>
+        <div v-else class="history-list">
+          <div 
+            v-for="(item, index) in translationHistory" 
+            :key="item.id"
+            class="history-item"
+          >
+            <div class="history-user">{{ item.userId }}</div>
+            <div class="history-original">{{ item.original }}</div>
+            <div class="history-translation">{{ item.translation }}</div>
+            <div class="history-time">{{ formatTime(item.timestamp) }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- WebSocket连接错误提示 -->
     <div v-if="showWebSocketError" class="websocket-error-overlay">
@@ -28,7 +66,7 @@
       </div>
     </div>
 
-    <!-- 只保留字幕显示，翻译控制已集成到底部控制栏 -->
+    <!-- 字幕显示 -->
     <div class="subtitle-container" v-if="currentSubtitle">
       <div class="subtitle-content">
         <div class="subtitle-item" :key="currentSubtitle.id">
@@ -38,39 +76,12 @@
       </div>
     </div>
 
-    <!-- 翻译历史记录 -->
-    <div 
-      class="translation-history" 
-      v-if="translationHistory.length > 0 && showHistory"
-      :style="{ left: historyPosition.x + 'px', top: historyPosition.y + 'px' }"
-      ref="historyRef"
-    >
-      <div 
-        class="history-header"
-        @mousedown="startDrag"
-        @touchstart="startDrag"
-      >
-        <span class="history-title">{{ t('Translation History') }}</span>
-        <button class="clear-history-btn" @click="clearHistory" :title="t('Clear history')">
-          ×
-        </button>
-      </div>
-      <div class="history-content">
-        <div 
-          v-for="(item, index) in translationHistory" 
-          :key="item.id"
-          class="history-item"
-        >
-          <div class="history-text">{{ item.translation }}</div>
-          <div class="history-time">{{ formatTime(item.timestamp) }}</div>
-        </div>
-      </div>
-    </div>
+
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref, computed } from 'vue';
 import { ConferenceMainView, conference, RoomEvent, LanguageOption, ThemeOption } from '../components/TUIRoom/index.ts';
 import { onBeforeRouteLeave, useRoute } from 'vue-router';
 import router from '../router/index';
@@ -82,28 +93,28 @@ import { translationWebSocketService } from '../services/translationWebSocket';
 const { t } = useI18n();
 const { theme } = useUIKit();
 
+
+
 // 字幕相关状态
 const currentSubtitle = ref<{ original: string; translation: string; id: number; timestamp: number } | null>(null);
 const subtitleTimeout = ref<number | null>(null);
 
 // 翻译历史相关状态
+const showHistoryPanel = ref(false);
 const translationHistory = ref<Array<{
   id: string;
+  original: string;
   translation: string;
+  userId: string;
   timestamp: number;
 }>>([]);
 
-// 控制历史记录显示状态
-const showHistory = ref(true);
 
-// 拖拽相关状态
-const historyRef = ref<HTMLElement | null>(null);
-const isDragging = ref(false);
-const dragStartPos = ref({ x: 0, y: 0 });
-const historyPosition = ref({ x: 420, y: 20 }); // 初始位置
 
 // WebSocket连接错误提示状态
 const showWebSocketError = ref(false);
+
+
 
 // 新字幕到来时显示并自动淡出
 const showSubtitle = (original: string, translation: string) => {
@@ -124,12 +135,58 @@ const showSubtitle = (original: string, translation: string) => {
   }, 5000);
 };
 
-// 添加翻译历史记录
-const addToHistory = (translation: string) => {
+// 翻译历史相关方法
+const toggleHistoryPanel = () => {
+  showHistoryPanel.value = !showHistoryPanel.value;
+};
+
+const clearHistory = () => {
+  translationHistory.value = [];
+  // 触发全局事件，通知其他组件
+  window.dispatchEvent(new CustomEvent('clear-translation-history'));
+};
+
+const formatTime = (timestamp: number): string => {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  
+  if (diff < 60000) { // 1分钟内
+    return t('Just now');
+  } else if (diff < 3600000) { // 1小时内
+    const minutes = Math.floor(diff / 60000);
+    return `${minutes}${t('min ago')}`;
+  } else if (diff < 86400000) { // 24小时内
+    const hours = Math.floor(diff / 3600000);
+    return `${hours}${t('h ago')}`;
+  } else {
+    return date.toLocaleDateString();
+  }
+};
+
+
+
+// 监听WebSocket翻译结果
+const handleTranslationResult = (data: any) => {
+  if (data.fromUserId !== translationWebSocketService.getCurrentUserId()) {
+    showSubtitle(data.data.original, data.data.translation);
+  }
+};
+
+// 处理翻译广播
+const handleTranslationBroadcast = (data: any) => {
+  console.log('收到翻译广播:', data);
+  
+  // 显示字幕
+  showSubtitle(data.zhText, data.jaText);
+  
+  // 添加到翻译历史
   const historyItem = {
     id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-    translation,
-    timestamp: Date.now()
+    original: data.zhText,
+    translation: data.jaText,
+    userId: data.userId,
+    timestamp: data.timestamp || Date.now(),
   };
   
   translationHistory.value.unshift(historyItem);
@@ -140,229 +197,47 @@ const addToHistory = (translation: string) => {
   }
 };
 
-// 清空历史记录
-const clearHistory = () => {
-  translationHistory.value = [];
-  showHistory.value = false; // 清空时也隐藏历史记录
+// 处理用户加入
+const handleUserJoin = (data: any) => {
+  console.log('用户加入:', data);
 };
 
-// 格式化时间
-const formatTime = (timestamp: number): string => {
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString('zh-CN', { 
-    hour: '2-digit', 
-    minute: '2-digit', 
-    second: '2-digit' 
-  });
+// 处理用户离开
+const handleUserLeave = (data: any) => {
+  console.log('用户离开:', data);
 };
 
-// 开始拖拽
-const startDrag = (event: MouseEvent | TouchEvent) => {
-  event.preventDefault();
-  isDragging.value = true;
-  
-  const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
-  const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
-  
-  dragStartPos.value = {
-    x: clientX - historyPosition.value.x,
-    y: clientY - historyPosition.value.y
-  };
-  
-  document.addEventListener('mousemove', onDrag);
-  document.addEventListener('touchmove', onDrag);
-  document.addEventListener('mouseup', stopDrag);
-  document.addEventListener('touchend', stopDrag);
-};
-
-// 拖拽中
-const onDrag = (event: MouseEvent | TouchEvent) => {
-  if (!isDragging.value) return;
-  
-  const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
-  const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
-  
-  const newX = clientX - dragStartPos.value.x;
-  const newY = clientY - dragStartPos.value.y;
-  
-  // 限制在窗口范围内
-  const maxX = window.innerWidth - 300; // 历史记录宽度
-  const maxY = window.innerHeight - 200; // 历史记录高度
-  
-  historyPosition.value = {
-    x: Math.max(0, Math.min(newX, maxX)),
-    y: Math.max(0, Math.min(newY, maxY))
-  };
-};
-
-// 停止拖拽
-const stopDrag = () => {
-  isDragging.value = false;
-  document.removeEventListener('mousemove', onDrag);
-  document.removeEventListener('touchmove', onDrag);
-  document.removeEventListener('mouseup', stopDrag);
-  document.removeEventListener('touchend', stopDrag);
-};
-
-// 监听WebSocket翻译结果
-const handleTranslationResult = (data: any) => {
-  if (data.fromUserId !== translationWebSocketService.getCurrentUserId()) {
-    showSubtitle(data.data.original, data.data.translation);
-    
-    // 添加到历史记录
-    if (data.data.translation) {
-      addToHistory(data.data.translation);
-      // 显示历史记录
-      showHistory.value = true;
-    }
-  }
-};
-
-// 监听翻译广播
-const handleTranslationBroadcast = (data: any) => {
-  console.log('收到翻译广播:', data);
-  showSubtitle(data.original, data.translation);
-  
-  // 添加到历史记录
-  if (data.translation) {
-    addToHistory(data.translation);
-    // 显示历史记录
-    showHistory.value = true;
-  }
-};
-
-// 监听翻译开始事件
-const handleTranslationStarted = () => {
-  // 翻译开始时显示历史记录
-  showHistory.value = true;
-};
-
-// 监听翻译停止事件
-const handleTranslationStopped = () => {
-  // 翻译停止时隐藏历史记录
-  showHistory.value = false;
-  console.log('翻译停止，隐藏翻译历史');
-};
-
-// 监听翻译状态更新
-const handleTranslationStatusUpdated = (statusMap: Record<string, any>) => {
-  console.log('翻译状态更新:', statusMap);
-  
-  // 检查当前用户是否还在查看任何翻译
-  const currentUserId = translationWebSocketService.getCurrentUserId();
-  let isViewingAnyTranslation = false;
-  
-  for (const [userId, status] of Object.entries(statusMap)) {
-    if (status.viewers && Array.isArray(status.viewers)) {
-      if (status.viewers.includes(currentUserId)) {
-        isViewingAnyTranslation = true;
-        break;
-      }
-    }
-  }
-  
-  // 如果当前用户没有在查看任何翻译，隐藏历史记录
-  if (!isViewingAnyTranslation) {
-    showHistory.value = false;
-    console.log('当前用户没有在查看任何翻译，隐藏翻译历史');
-  }
-};
-
-// 显示WebSocket连接错误提示
-const showWebSocketErrorModal = () => {
-  showWebSocketError.value = true;
-  
-  // 输出调试信息到控制台
-  console.log('=== WebSocket连接问题诊断信息 ===');
-  console.log('当前URL:', window.location.href);
-  console.log('User Agent:', navigator.userAgent);
-  console.log('sessionStorage内容:');
-  for (let i = 0; i < sessionStorage.length; i++) {
-    const key = sessionStorage.key(i);
-    if (key) {
-      console.log(`  ${key}:`, sessionStorage.getItem(key));
-    }
-  }
-  console.log('localStorage内容:');
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key) {
-      console.log(`  ${key}:`, localStorage.getItem(key));
-    }
-  }
-  console.log('=== 诊断信息结束 ===');
-};
-
-// 清除缓存并重试WebSocket连接
-const clearCacheAndRetry = () => {
-  clearBrowserCache();
-  showWebSocketError.value = false;
-  initWebSocket(); // 重新尝试连接
-};
-
-// 关闭WebSocket连接错误提示
-const dismissError = () => {
-  showWebSocketError.value = false;
+// 处理错误
+const handleError = (data: any) => {
+  console.error('WebSocket错误:', data);
+  // 可以显示错误提示
 };
 
 // 初始化WebSocket连接
 const initWebSocket = async () => {
   console.log('开始初始化WebSocket连接...');
   
-  // 重新获取用户信息，确保是最新的
   const userInfo = getUserInfo();
   const roomInfo = getRoomInfo();
   
-  console.log('获取到的用户信息:', userInfo);
-  console.log('获取到的房间信息:', roomInfo);
-  
-  if (!userInfo) {
-    console.error('无法获取用户信息，用户间通信WebSocket连接失败');
-    console.error('sessionStorage中的tuiRoom-userInfo:', sessionStorage.getItem('tuiRoom-userInfo'));
-    showWebSocketErrorModal(); // 显示错误提示
+  if (!userInfo || !roomInfo) {
+    console.error('无法获取用户或房间信息');
     return;
   }
   
-  if (!roomInfo) {
-    console.error('无法获取房间信息，用户间通信WebSocket连接失败');
-    console.error('sessionStorage中的tuiRoom-roomInfo:', sessionStorage.getItem('tuiRoom-roomInfo'));
-    showWebSocketErrorModal(); // 显示错误提示
-    return;
-  }
-  
-  // 添加重试机制
-  let retryCount = 0;
-  const maxRetries = 3;
-  
-  while (retryCount < maxRetries) {
-    try {
-      console.log(`尝试连接WebSocket (第${retryCount + 1}次)...`);
-      await translationWebSocketService.connect(userInfo.userId, userInfo.userName, roomInfo.roomId);
-      console.log('用户间通信WebSocket连接成功');
-      
-      // 注册事件监听器
-      translationWebSocketService.on('translation_result', handleTranslationResult);
-      translationWebSocketService.on('translation_broadcast', handleTranslationBroadcast);
-      translationWebSocketService.on('translation_started', handleTranslationStarted);
-      translationWebSocketService.on('translation_stopped', handleTranslationStopped);
-      translationWebSocketService.on('translation_status_updated', handleTranslationStatusUpdated);
-      
-      return; // 连接成功，退出重试循环
-      
-    } catch (error) {
-      retryCount++;
-      console.error(`WebSocket连接失败 (第${retryCount}次):`, error);
-      
-      if (retryCount >= maxRetries) {
-        console.error('WebSocket连接失败，已达到最大重试次数');
-        showWebSocketErrorModal(); // 显示错误提示
-        return;
-      }
-      
-      // 等待一段时间后重试
-      console.log(`等待${retryCount * 1000}ms后重试...`);
-      await new Promise(resolve => setTimeout(resolve, retryCount * 1000));
-    }
+  try {
+    await translationWebSocketService.connect(userInfo.userId, userInfo.userName, roomInfo.roomId);
+    console.log('用户间通信WebSocket连接成功');
+    
+    // 注册事件监听器
+    translationWebSocketService.on('translation_broadcast', handleTranslationBroadcast);
+    translationWebSocketService.on('user_join', handleUserJoin);
+    translationWebSocketService.on('user_leave', handleUserLeave);
+    translationWebSocketService.on('error', handleError);
+    
+  } catch (error) {
+    console.error('WebSocket连接失败:', error);
+    showWebSocketErrorModal();
   }
 };
 
@@ -436,6 +311,43 @@ const cleanupUserInfo = () => {
   console.log('用户信息清理完成');
 };
 
+// 显示WebSocket连接错误提示
+const showWebSocketErrorModal = () => {
+  showWebSocketError.value = true;
+  
+  // 输出调试信息到控制台
+  console.log('=== WebSocket连接问题诊断信息 ===');
+  console.log('当前URL:', window.location.href);
+  console.log('User Agent:', navigator.userAgent);
+  console.log('sessionStorage内容:');
+  for (let i = 0; i < sessionStorage.length; i++) {
+    const key = sessionStorage.key(i);
+    if (key) {
+      console.log(`  ${key}:`, sessionStorage.getItem(key));
+    }
+  }
+  console.log('localStorage内容:');
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key) {
+      console.log(`  ${key}:`, localStorage.getItem(key));
+    }
+  }
+  console.log('=== 诊断信息结束 ===');
+};
+
+// 清除缓存并重试WebSocket连接
+const clearCacheAndRetry = () => {
+  clearBrowserCache();
+  showWebSocketError.value = false;
+  initWebSocket(); // 重新尝试连接
+};
+
+// 关闭WebSocket连接错误提示
+const dismissError = () => {
+  showWebSocketError.value = false;
+};
+
 const route = useRoute();
 const roomInfo = sessionStorage.getItem('tuiRoom-roomInfo');
 const userInfo = sessionStorage.getItem('tuiRoom-userInfo');
@@ -453,8 +365,18 @@ if (!roomId) {
 
 // 组件挂载时初始化
 onMounted(async () => {
-  // 先清理可能冲突的用户信息
+  // 清理可能冲突的用户信息
   cleanupUserInfo();
+  
+  // 监听历史面板切换事件
+  window.addEventListener('toggle-history-panel', (event: any) => {
+    showHistoryPanel.value = event.detail.show;
+  });
+  
+  // 监听清空历史事件
+  window.addEventListener('clear-translation-history', () => {
+    translationHistory.value = [];
+  });
   
   const { action, isSeatEnabled, roomParam, hasCreated } = JSON.parse(roomInfo as string);
   const { sdkAppId, userId, userSig, userName, avatarUrl } = JSON.parse(userInfo as string);
@@ -492,9 +414,13 @@ onMounted(async () => {
 onUnmounted(() => {
   translationWebSocketService.off('translation_result', handleTranslationResult);
   translationWebSocketService.off('translation_broadcast', handleTranslationBroadcast);
-  translationWebSocketService.off('translation_started', handleTranslationStarted);
-  translationWebSocketService.off('translation_stopped', handleTranslationStopped);
-  translationWebSocketService.off('translation_status_updated', handleTranslationStatusUpdated);
+  translationWebSocketService.off('user_join', handleUserJoin);
+  translationWebSocketService.off('user_leave', handleUserLeave);
+  translationWebSocketService.off('error', handleError);
+  
+  // 移除事件监听器
+  window.removeEventListener('toggle-history-panel', () => {});
+  window.removeEventListener('clear-translation-history', () => {});
 });
 
 onBeforeRouteLeave((to: any, from: any, next: any) => {
@@ -554,8 +480,10 @@ onUnmounted(() => {
   
   // 移除翻译结果监听
   translationWebSocketService.off('translation_result', handleTranslationResult);
-  translationWebSocketService.off('translation_started', handleTranslationStarted);
-  translationWebSocketService.off('translation_stopped', handleTranslationStopped);
+  translationWebSocketService.off('translation_broadcast', handleTranslationBroadcast);
+  translationWebSocketService.off('user_join', handleUserJoin);
+  translationWebSocketService.off('user_leave', handleUserLeave);
+  translationWebSocketService.off('error', handleError);
 });
 
 const goToPage = (routePath: string) => {
@@ -578,6 +506,204 @@ const goToPage = (routePath: string) => {
   position: relative;
   width: 100%;
   height: 100%;
+  display: flex;
+  flex-direction: row;
+}
+
+.room-container.with-history {
+  /* 当显示历史面板时，调整布局 */
+}
+
+.room-content {
+  flex: 1;
+  min-width: 0; /* 防止flex子元素溢出 */
+  transition: width 0.3s ease;
+}
+
+.room-container.with-history .room-content {
+  width: calc(100% - 400px); /* 当显示历史面板时，会议内容占剩余空间 */
+}
+
+
+
+.room-content {
+  width: 100%;
+  height: 100%;
+}
+
+/* 翻译历史面板样式 */
+.history-panel {
+  width: 400px;
+  height: 100vh;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  display: flex;
+  flex-direction: column;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 13px;
+  border-left: 1px solid #3c3c3c;
+  flex-shrink: 0;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #2d2d30;
+  border-bottom: 1px solid #3c3c3c;
+  flex-shrink: 0;
+  min-height: 32px;
+}
+
+.header-tabs {
+  display: flex;
+  align-items: center;
+}
+
+.tab {
+  padding: 6px 12px;
+  background: #007acc;
+  color: white;
+  border-radius: 4px 4px 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: default;
+}
+
+.tab.active {
+  background: #007acc;
+}
+
+.header-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.clear-btn, .close-btn {
+  background: none;
+  border: none;
+  color: #cccccc;
+  cursor: pointer;
+  padding: 4px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  transition: all 0.2s;
+  font-size: 14px;
+}
+
+.clear-btn:hover, .close-btn:hover {
+  background-color: #3c3c3c;
+  color: #ffffff;
+}
+
+.close-btn {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.clear-icon {
+  font-size: 12px;
+}
+
+.panel-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+}
+
+.empty-history {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #6c757d;
+  text-align: center;
+}
+
+.empty-history p {
+  margin: 16px 0 0 0;
+  font-size: 14px;
+  color: #6c757d;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.history-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.history-list::-webkit-scrollbar-track {
+  background: #2d2d30;
+}
+
+.history-list::-webkit-scrollbar-thumb {
+  background: #5a5a5a;
+  border-radius: 4px;
+}
+
+.history-list::-webkit-scrollbar-thumb:hover {
+  background: #7a7a7a;
+}
+
+.history-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid #3c3c3c;
+  transition: background-color 0.2s;
+}
+
+.history-item:hover {
+  background-color: #2d2d30;
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-user {
+  font-size: 11px;
+  color: #569cd6;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.history-original {
+  font-size: 13px;
+  color: #d4d4d4;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.history-translation {
+  font-size: 13px;
+  color: #4ec9b0;
+  margin-bottom: 4px;
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+.history-time {
+  font-size: 10px;
+  color: #6a9955;
+  text-align: right;
 }
 
 /* WebSocket连接错误提示样式 */
@@ -708,118 +834,7 @@ const goToPage = (routePath: string) => {
   opacity: 0.9;
 }
 
-/* 翻译历史记录样式 */
-.translation-history {
-  position: fixed;
-  width: 300px;
-  max-height: 400px; /* 限制高度，只显示约5条记录 */
-  background: rgba(0, 0, 0, 0.7);
-  border-radius: 8px;
-  backdrop-filter: blur(10px);
-  z-index: 999;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 13px;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  user-select: none; /* 防止拖拽时选中文字 */
-}
 
-.history-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 8px 8px 0 0;
-  cursor: move; /* 显示拖拽光标 */
-  user-select: none;
-}
-
-.history-header:hover {
-  background: rgba(0, 0, 0, 0.4);
-}
-
-.history-title {
-  font-weight: 500;
-  font-size: 12px;
-  color: #fff;
-  pointer-events: none; /* 防止标题文字影响拖拽 */
-}
-
-.clear-history-btn {
-  background: none;
-  border: none;
-  color: #ccc;
-  font-size: 16px;
-  cursor: pointer;
-  padding: 0;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  transition: all 0.2s;
-  pointer-events: auto; /* 确保按钮可以点击 */
-}
-
-.clear-history-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-
-.history-content {
-  max-height: 340px;
-  overflow-y: auto;
-  padding: 8px 0;
-}
-
-.history-content::-webkit-scrollbar {
-  width: 4px;
-}
-
-.history-content::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-}
-
-.history-content::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 2px;
-}
-
-.history-content::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
-}
-
-.history-item {
-  padding: 8px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  transition: background-color 0.2s;
-}
-
-.history-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.history-item:last-child {
-  border-bottom: none;
-}
-
-.history-text {
-  color: #fff;
-  font-size: 13px;
-  line-height: 1.4;
-  margin-bottom: 4px;
-  word-wrap: break-word;
-}
-
-.history-time {
-  color: #ccc;
-  font-size: 11px;
-  opacity: 0.7;
-}
 
 @media (max-width: 768px) {
   .subtitle-container {
@@ -843,10 +858,14 @@ const goToPage = (routePath: string) => {
     font-size: 12px;
   }
   
-  .translation-history {
-    width: calc(100vw - 20px);
-    max-width: 300px;
-    max-height: 150px;
+  /* 移动端历史面板样式 */
+  .room-container.with-history .room-content {
+    width: 0;
+    overflow: hidden;
+  }
+  
+  .history-panel {
+    width: 100%;
   }
 }
 </style>
