@@ -1,8 +1,8 @@
 <template>
   <div class="translation-control-container">
     <icon-button
-      :is-active="isTranslating"
       :title="t('Translation')"
+      :is-active="isTranslating"
       @click-icon="toggleTranslationPanel"
     >
       <IconLanguage size="24" />
@@ -34,6 +34,7 @@ import { useI18n } from '../../../../locales';
 import RealtimeTranslator from '../../../../components/RealtimeTranslator.vue';
 import { translationWebSocketService } from '../../../../services/translationWebSocket';
 
+// 国际化
 const { t } = useI18n();
 
 // 响应式数据
@@ -57,6 +58,8 @@ const handleTranslatorVisibilityChange = (visible: boolean) => {
     showTranslationPanel.value = false;
   }
 };
+
+
 </script>
 
 <style scoped>
@@ -84,15 +87,15 @@ const handleTranslatorVisibilityChange = (visible: boolean) => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: #f8f9fa;
-  border-radius: 12px 12px 0 0;
   border-bottom: 1px solid #e9ecef;
+  border-radius: 12px 12px 0 0;
+  background: #f8f9fa;
 }
 
 .panel-header h3 {
   margin: 0;
   font-size: 15px;
-  font-weight: 600;
+  color: #333;
 }
 
 .close-btn {
@@ -122,23 +125,28 @@ const handleTranslatorVisibilityChange = (visible: boolean) => {
 }
 
 /* 覆盖 RealtimeTranslator 的一些样式，使其适合在面板中显示 */
-.panel-content :deep(.translator-widget) {
+.panel-content :deep(.realtime-translator) {
   position: static;
   width: 100%;
   border-radius: 0;
   box-shadow: none;
   margin: 0;
+  background: white;
 }
 
-.panel-content :deep(.translator-header) {
-  border-radius: 0;
-  border-bottom: 1px solid #e9ecef;
+.panel-content :deep(.connection-status) {
+  display: none; /* 隐藏连接状态，因为面板中不需要 */
 }
 
-.panel-content :deep(.translator-content) {
-  padding: 16px;
+.panel-content :deep(.error-message) {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 1000;
 }
 
+/* 响应式设计 */
 @media (max-width: 768px) {
   .translation-panel {
     width: 400px; /* 从360px增加到400px */
