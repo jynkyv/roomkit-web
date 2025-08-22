@@ -1,49 +1,78 @@
 <!-- eslint-disable -->
 <template>
-  <div class="translator-widget" v-show="showTranslator">
-    <div class="translator-content">
-      <!-- 语言控制 -->
-      <div class="language-controls">
-        <div class="section-title">{{ t('Translation settings') }}</div>
-        <div class="lang-selector">
-          <select v-model="fromLang" class="lang-select" :disabled="isInitiating">
-            <option value="zh-CHS">{{ t('Chinese') }}</option>
-            <option value="ja">{{ t('Japanese') }}</option>
-          </select>
-          <span class="arrow">→</span>
-          <select v-model="toLang" class="lang-select" :disabled="isInitiating">
-            <option value="ja">{{ t('Japanese') }}</option> 
-            <option value="zh-CHS">{{ t('Chinese') }}</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- 用户选择器 -->
-      <div class="user-selection">
-        <div class="section-title">{{ t('Select translation target') }}</div>
-        <UserSelector 
-          v-model:showSelector="showUserSelector"
-          @translation-started="handleTranslationStarted"
-          @translation-stopped="handleTranslationStopped"
-          :fromLang="fromLang"
-          :toLang="toLang"
-          :activeTranslationSessions="activeTranslationSessions"
-        />
+  <div class="realtime-translator">
+    <!-- 连接状态 -->
+    <div class="connection-status">
+      <span :class="['status-indicator', { connected: translationWebSocketService.isWebSocketConnected() }]">
+        {{ connectionStatus }}
+      </span>
+      <div class="streaming-mode-info">
+        <span class="mode-badge">流式翻译模式</span>
       </div>
     </div>
 
+    <!-- 错误提示 -->
     <div v-if="error" class="error-message">
       {{ error }}
     </div>
+
+    <!-- 语言配置面板 -->
+    <div class="language-config-panel">
+      <div class="config-header">
+        <h4>{{ t('Translation Settings') }}</h4>
+      </div>
+      
+      <div class="language-selector">
+        <div class="language-group">
+          <label>{{ t('I speak') }}</label>
+          <select v-model="languageConfig.sourceLanguage" @change="updateLanguageConfig">
+            <option value="zh-CHS">中文</option>
+            <option value="ja">日本語</option>
+          </select>
+        </div>
+        
+        <div class="arrow">→</div>
+        
+        <div class="language-group">
+          <label>{{ t('I want to translate to') }}</label>
+          <select v-model="languageConfig.targetLanguage" @change="updateLanguageConfig">
+            <option value="ja">日本語</option>
+            <option value="zh-CHS">中文</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="config-actions">
+        <button @click="saveLanguageConfig" class="save-btn">
+          {{ t('Save') }}
+        </button>
+        <button @click="resetLanguageConfig" class="reset-btn">
+          {{ t('Reset') }}
+        </button>
+      </div>
+    </div>
+
+    <!-- 翻译控制 -->
+    <div class="translation-controls">
+      <button 
+        @click="toggleRecording" 
+        :disabled="!canStartReactive"
+        :class="['record-btn', { recording: isRecording }]"
+      >
+        {{ isRecording ? t('Stop') : t('Start') }}
+      </button>
+    </div>
+
+
   </div>
 </template>
 
 <script setup lang="ts">
-// @ts-nocheck
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import UserSelector from './UserSelector.vue'
-import { translationWebSocketService, type TranslationUser } from '../services/translationWebSocket'
-import { useI18n } from '../locales'
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { useI18n } from '../locales';
+import { translationWebSocketService } from '../services/translationWebSocket';
+import { LanguageConfigService, type LanguageConfig } from '../services/languageConfig';
+import { useSubtitleStore } from '../stores/subtitle';
 
 // 环境变量
 const appKey = import.meta.env.VITE_YOUDAO_APP_KEY;
@@ -51,57 +80,34 @@ const appSecret = import.meta.env.VITE_YOUDAO_APP_SECRET;
 
 // Props
 interface Props {
-  showTranslator: boolean
+  showTranslator: boolean;
 }
 
-const props = defineProps<Props>()
+const props = defineProps<Props>();
 
 // Emits
 const emit = defineEmits<{
-  'update:showTranslator': [value: boolean]
-}>()
+  'update:showTranslator': [value: boolean];
+}>();
 
 // 国际化
 const { t } = useI18n();
 
+// 字幕状态管理
+const subtitleStore = useSubtitleStore();
+
 // 响应式数据
-const fromLang = ref('zh-CHS');
-const toLang = ref('ja');
-const apiFromLang = ref('zh-CHS');
-const apiToLang = ref('ja');
 const isRecording = ref(false);
-const isInitiating = ref(false); // 发起翻译的状态
 const connectionStatus = ref(t('Disconnected'));
 const error = ref('');
-const showUserSelector = ref(false);
-const currentTargetUser = ref<TranslationUser | null>(null);
-const isWebSocketConnected = ref(false);
-
-// 新增：管理翻译会话
-const activeTranslationSessions = ref<Map<string, {
-  targetUserId: string;
-  targetUserName: string;
-  isInitiator: boolean; // true表示我是发起者，false表示我是被翻译者
-  fromLang: string;
-  toLang: string;
-}>>(new Map());
-
-// 新增：管理我被要求翻译的会话（key为发起者id）
-const activeIncomingSessions = ref<Map<string, {
-  fromUserId: string;
-  fromUserName: string;
-  fromLang: string;
-  toLang: string;
-}>>(new Map());
 
 const recognitionResults = ref<Array<{ text: string; timestamp: number }>>([]);
-const translationResults = ref<Array<{ text: string; timestamp: number }>>([]);
 
-// 专门用于WebSocket翻译结果的数组
-const websocketTranslationResults = ref<Array<{ original: string; translation: string; timestamp: number }>>([]);
+// 语言配置
+const languageConfig = ref<LanguageConfig>(LanguageConfigService.getConfig());
+const originalConfig = ref<LanguageConfig>({ ...LanguageConfigService.getConfig() });
 
 // WebSocket相关
-// 注意：ws变量只用于有道WebSocket，不要和用户间WebSocket混用！
 let ws: WebSocket | null = null;
 let audioContext: any = null;
 let processor: any = null;
@@ -109,238 +115,330 @@ let stream: any = null;
 
 // 计算属性
 const hasValidConfig = computed(() => {
-  return !!appKey && !!appSecret;
+  const hasKeys = !!appKey && !!appSecret;
+  console.log('API配置检查:', { appKey: !!appKey, appSecret: !!appSecret, hasKeys });
+  return hasKeys;
 });
 
-const canStart = computed(() => {
-  return hasValidConfig.value && currentTargetUser.value;
+
+
+// 添加一个响应式的连接状态
+const webSocketConnected = ref(false);
+
+// 更新连接状态的函数
+const updateConnectionStatus = () => {
+  webSocketConnected.value = translationWebSocketService.isWebSocketConnected();
+};
+
+// 使用响应式状态的计算属性
+const canStartReactive = computed(() => {
+  return hasValidConfig.value && webSocketConnected.value;
 });
 
-// 字幕结果计算属性 - 只显示WebSocket接收到的翻译结果
-const subtitleResults = computed(() => {
-  return websocketTranslationResults.value.map((result, index) => ({
-    original: result.original,
-    translation: result.translation,
-    id: index,
-    timestamp: result.timestamp
-  }));
-});
 
-// 字幕显示状态
-const visibleSubtitles = ref<Set<number>>(new Set());
-
-// 字幕淡出效果
-const fadeOutSubtitle = (id: number) => {
-  setTimeout(() => {
-    visibleSubtitles.value.delete(id);
-  }, 5000); // 5秒后开始淡出
-};
-
-// 监听字幕变化，添加新字幕到可见列表
-const addNewSubtitle = () => {
-  if (subtitleResults.value.length > 0) {
-    const latestSubtitle = subtitleResults.value[subtitleResults.value.length - 1];
-    visibleSubtitles.value.add(latestSubtitle.id);
-    fadeOutSubtitle(latestSubtitle.id);
-  }
-};
-
-// 获取用户信息
-const getUserInfo = () => {
-  try {
-    const userInfoStr = sessionStorage.getItem('tuiRoom-userInfo');
-    if (userInfoStr) {
-      const userInfo = JSON.parse(userInfoStr);
-      return {
-        userId: userInfo.userId,
-        userName: userInfo.userName
-      };
-    }
-  } catch (error) {
-    console.error('获取用户信息失败:', error);
-  }
-  
-  // 如果没有用户信息，返回null
-  return null;
-};
-
-// 获取房间信息
-const getRoomInfo = () => {
-  try {
-    const roomInfoStr = sessionStorage.getItem('tuiRoom-roomInfo');
-    if (roomInfoStr) {
-      const roomInfo = JSON.parse(roomInfoStr);
-      return {
-        roomId: roomInfo.roomId
-      };
-    }
-  } catch (error) {
-    console.error('获取房间信息失败:', error);
-  }
-  
-  // 如果没有房间信息，返回null
-  return null;
-};
-
-// 初始化WebSocket连接
-const initWebSocket = async () => {
-  const userInfo = getUserInfo();
-  const roomInfo = getRoomInfo();
-  
-  if (!userInfo) {
-    console.error('无法获取用户信息，用户间通信WebSocket连接失败');
-    error.value = t('Failed to get user info');
-    return;
-  }
-  
-  if (!roomInfo) {
-    console.error('无法获取房间信息，用户间通信WebSocket连接失败');
-    error.value = t('Failed to get room info');
-    return;
-  }
-
-  try {
-    await translationWebSocketService.connect(userInfo.userId, userInfo.userName, roomInfo.roomId);
-    isWebSocketConnected.value = true;
-    connectionStatus.value = t('Connected');
-    console.log('用户间通信WebSocket连接成功，用户:', userInfo.userName, '房间:', roomInfo.roomId);
-  } catch (error) {
-    console.error('用户间通信WebSocket连接失败:', error);
-    error.value = t('WebSocket connection failed');
-  }
-};
 
 // 方法
-// 添加一个方法来同步翻译状态
-const syncTranslationState = () => {
-  // 同步发起翻译的状态
-  const hasActiveInitiatorSessions = Array.from(activeTranslationSessions.value.values())
-    .some(session => session.isInitiator);
-  
-  if (hasActiveInitiatorSessions) {
-    isInitiating.value = true;
-    // 找到第一个活跃的发起者会话
-    const firstInitiatorSession = Array.from(activeTranslationSessions.value.values())
-      .find(session => session.isInitiator);
-    
-    if (firstInitiatorSession) {
-      currentTargetUser.value = {
-        id: firstInitiatorSession.targetUserId,
-        name: firstInitiatorSession.targetUserName,
-        isOnline: true
-      };
-      connectionStatus.value = t('Waiting for target user to start translation...');
+const getLanguageName = (code: string): string => {
+  return LanguageConfigService.getLanguageName(code);
+};
+
+const toggleRecording = async () => {
+  if (isRecording.value) {
+    stopYoudaoTranslation();
+  } else {
+    await startYoudaoTranslation();
+  }
+};
+
+
+
+const clearHistory = () => {
+  subtitleStore.clearSubtitles();
+};
+
+
+
+// 语言配置相关方法
+const updateLanguageConfig = () => {
+  // 确保源语言和目标语言不同
+  if (languageConfig.value.sourceLanguage === languageConfig.value.targetLanguage) {
+    if (languageConfig.value.sourceLanguage === 'zh-CHS') {
+      languageConfig.value.targetLanguage = 'ja';
+    } else {
+      languageConfig.value.targetLanguage = 'zh-CHS';
     }
-  } else {
-    isInitiating.value = false;
-    currentTargetUser.value = null;
-  }
-  
-  console.log('同步翻译状态:', {
-    isInitiating: isInitiating.value,
-    activeSessions: activeTranslationSessions.value.size,
-    incomingSessions: activeIncomingSessions.value.size
-  });
-};
-
-// 修改 toggleTranslator 方法
-const toggleTranslator = () => {
-  // 只是切换UI显示状态，不影响翻译进程
-  emit('update:showTranslator', !props.showTranslator);
-  
-  // 如果当前有活跃的翻译会话，确保它们继续运行
-  console.log('切换翻译器UI显示状态，当前活跃翻译会话数:', activeTranslationSessions.value.size);
-  console.log('当前被要求翻译的会话数:', activeIncomingSessions.value.size);
-  
-  // 同步翻译状态
-  syncTranslationState();
-};
-
-// 处理翻译开始（作为发起者）
-const handleTranslationStarted = (userId: string, userName: string) => {
-  // 创建新的翻译会话
-  const sessionId = `initiator_${userId}`;
-  activeTranslationSessions.value.set(sessionId, {
-    targetUserId: userId,
-    targetUserName: userName,
-    isInitiator: true,
-    fromLang: fromLang.value,
-    toLang: toLang.value
-  });
-  
-  currentTargetUser.value = {
-    id: userId,
-    name: userName,
-    isOnline: true
-  };
-  showUserSelector.value = false;
-  isInitiating.value = true;
-  
-  // 作为发起者，只发送指令，不录音
-  connectionStatus.value = t('Waiting for target user to start translation...');
-  console.log(`发送翻译指令给用户: ${userName} (${userId})`);
-  
-  // 触发翻译开始事件，让room.vue知道翻译已开始
-  translationWebSocketService.emit('translation_started');
-};
-
-// 处理翻译停止（作为发起者停止对目标用户的翻译）
-const handleTranslationStopped = (userId: string) => {
-  const sessionId = `initiator_${userId}`;
-  const session = activeTranslationSessions.value.get(sessionId);
-  
-  if (session && session.isInitiator) {
-    // 只停止作为发起者的翻译会话
-    activeTranslationSessions.value.delete(sessionId);
-    currentTargetUser.value = null;
-    isInitiating.value = false;
-    console.log(`停止对用户 ${session.targetUserName} 的翻译`);
-    
-    // 发送停止翻译指令给目标用户
-    translationWebSocketService.stopTranslationSession(sessionId);
-    
-    // 触发翻译停止事件，让room.vue知道翻译已停止
-    translationWebSocketService.emit('translation_stopped');
-  } else {
-    // 如果不是发起者，说明是用户主动停止，不需要发送停止指令
-    console.log('用户主动停止翻译，不发送停止指令');
-    // 清理本地状态
-    activeTranslationSessions.value.delete(sessionId);
-    currentTargetUser.value = null;
-    isInitiating.value = false;
-    
-    // 触发翻译停止事件
-    translationWebSocketService.emit('translation_stopped');
   }
 };
 
-// SHA256
-const sha256 = async (str: string): Promise<string> => {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(str)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
-}
+const saveLanguageConfig = () => {
+  // 保存到localStorage
+  LanguageConfigService.saveConfig(languageConfig.value);
+  
+  // 更新原始配置
+  originalConfig.value = { ...languageConfig.value };
+  
+  console.log('语言配置已保存:', languageConfig.value);
+  
+  // 如果正在录音，重新启动翻译
+  if (isRecording.value) {
+    stopYoudaoTranslation();
+    setTimeout(() => {
+      startYoudaoTranslation();
+    }, 1000);
+  }
+};
 
-// 生成签名
-const generateSign = async (
-  appKey: string,
-  salt: string,
-  curtime: string,
-  appSecret: string,
-): Promise<string> => {
-  const signStr = appKey + salt + curtime + appSecret
-  return await sha256(signStr)
-}
+const resetLanguageConfig = () => {
+  languageConfig.value = { ...originalConfig.value };
+};
 
-// 生成UUID
-const generateUUID = (): string => {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
+// 有道翻译相关方法
+const startYoudaoTranslation = async () => {
+  if (!hasValidConfig.value) {
+    error.value = t('Please configure Youdao API key');
+    return;
+  }
+  
+  try {
+    error.value = '';
+    connectionStatus.value = t('Recording...');
+
+    // 获取麦克风音频流
+    stream = await getMicrophoneStream();
+    console.log('音频流:', stream);
+
+    // 创建音频上下文
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+        sampleRate: 16000,
+      });
+    }
+
+    // 创建音频源
+    const source = audioContext.createMediaStreamSource(stream);
+
+    // 使用较小的缓冲区大小，确保实时性
+    processor = audioContext.createScriptProcessor(2048, 1, 1);
+
+    processor.onaudioprocess = (e: any) => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        const inputData = e.inputBuffer.getChannelData(0);
+        const audioData = new Int16Array(inputData.length);
+
+        // 转换音频数据为16位PCM格式
+        for (let i = 0; i < inputData.length; i++) {
+          const sample = Math.max(-1, Math.min(1, inputData[i]));
+          audioData[i] = Math.round(sample * 32767);
+        }
+
+        // 检查音频数据是否有效（有声音）
+        const hasAudio = audioData.some(sample => Math.abs(sample) > 100);
+        if (hasAudio) {
+          console.log('发送音频数据，长度:', audioData.length);
+          ws.send(audioData.buffer);
+        }
+      }
+    };
+
+    source.connect(processor);
+    processor.connect(audioContext.destination);
+
+    await connectWebSocket();
+
+    isRecording.value = true;
+    connectionStatus.value = t('Streaming translation...');
+  } catch (err) {
+    error.value = `${t('Recording failed')}: ${err instanceof Error ? err.message : String(err)}`;
+    connectionStatus.value = t('Connection failed');
+    console.error('录音失败:', err);
+  }
+};
+
+// 连接有道WebSocket
+const connectWebSocket = async (): Promise<void> => {
+  return new Promise(async (resolve, reject) => {
+    const salt = generateUUID();
+    const curtime = Math.floor(Date.now() / 1000).toString();
+    const sign = await generateSign(appKey, salt, curtime, appSecret);
+
+    const params = new URLSearchParams({
+      appKey: appKey,
+      salt,
+      curtime,
+      sign,
+      signType: 'v4',
+      from: languageConfig.value.sourceLanguage,
+      to: languageConfig.value.targetLanguage,
+      format: 'wav',
+      channel: '1',
+      version: 'v1',
+      rate: '16000',
+      streamEpType: 'short',
+      transPattern: 'stream',
+      noitn: '0',
+    });
+
+    const wsUrl = `wss://openapi.youdao.com/stream_speech_trans?${params.toString()}`;
+
+    console.log('有道翻译WebSocket连接URL:', wsUrl);
+    console.log('使用的语言设置:', { 
+      from: languageConfig.value.sourceLanguage, 
+      to: languageConfig.value.targetLanguage 
+    });
+    console.log('翻译模式: 流式翻译 (stream) - 支持实时语音识别和翻译');
+
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      connectionStatus.value = t('Connected') + ' (流式模式)';
+      console.log('有道翻译WebSocket连接成功 - 流式模式');
+      resolve();
+    };
+
+    ws.onmessage = (event) => {
+      console.log('WebSocket onmessage触发，数据类型:', typeof event.data);
+      if (typeof event.data === 'string') {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('收到WebSocket消息:', data);
+          console.log('🚨 测试消息 - 如果看到这个，说明代码已更新 🚨');
+          console.log('data.action:', data.action, '类型:', typeof data.action);
+          console.log('data.action === "recognition":', data.action === 'recognition');
+          
+          if (data.action === 'started' && data.errorCode === '0') {
+            connectionStatus.value = '开始流式识别...';
+            console.log('开始流式识别成功');
+          } else if (data.action === 'recognition') {
+            console.log('=== 收到recognition消息 ===');
+            console.log('完整数据:', data);
+            if (data.result) {
+              const result = data.result;
+              console.log('result对象:', result);
+              console.log('result.context:', result.context);
+              console.log('result.tranContent:', result.tranContent);
+              console.log('result.partial:', result.partial);
+              
+              // 处理流式识别结果
+              if (result.context) {
+                console.log('流式识别结果:', result.context, 'partial:', result.partial);
+              }
+              
+              // 处理流式翻译结果
+              console.log('检查tranContent:', result.tranContent, '类型:', typeof result.tranContent);
+              console.log('result的所有字段:', Object.keys(result));
+              console.log('result的完整内容:', JSON.stringify(result, null, 2));
+              
+              if (result.tranContent) {
+                console.log('流式翻译结果:', result.tranContent, 'partial:', result.partial);
+                
+                // 处理流式字幕显示
+                if (result.partial) {
+                  console.log('处理部分字幕结果:', result.context, result.tranContent);
+                  // 部分结果：更新当前正在识别的字幕
+                  if (subtitleStore.subtitleResults.length === 0) {
+                    // 如果是第一个部分结果，创建新的字幕条目
+                    subtitleStore.addSubtitle(
+                      result.context || '',
+                      result.tranContent,
+                      '我',
+                      true // 标记为部分结果
+                    );
+                    console.log('创建新的部分字幕，当前字幕数量:', subtitleStore.subtitleResults.length);
+                  } else {
+                    // 更新最后一个字幕条目
+                    subtitleStore.updateLastSubtitle(
+                      result.context || '',
+                      result.tranContent
+                    );
+                    console.log('更新部分字幕，当前字幕数量:', subtitleStore.subtitleResults.length);
+                  }
+                } else {
+                  console.log('处理完整字幕结果:', result.context, result.tranContent);
+                  // 完整结果：完成当前字幕并发送广播
+                  if (subtitleStore.subtitleResults.length > 0) {
+                    // 完成最后一个部分字幕
+                    subtitleStore.completeLastSubtitle();
+                  }
+                  
+                  // 发送到WebSocket广播给其他用户
+                  translationWebSocketService.sendTranslationMessage(
+                    result.context || '',
+                    result.tranContent
+                  );
+                  
+                  // 如果还没有字幕条目，创建一个完整的字幕
+                  if (subtitleStore.subtitleResults.length === 0) {
+                    subtitleStore.addSubtitle(
+                      result.context || '',
+                      result.tranContent,
+                      '我',
+                      false // 标记为完整结果
+                    );
+                  }
+                  console.log('完成字幕处理，当前字幕数量:', subtitleStore.subtitleResults.length);
+                }
+              }
+              
+              // 处理流式模式特有的字段
+              if (result.segId) {
+                console.log('分段ID:', result.segId, '时间范围:', result.bg, '-', result.ed);
+              }
+            }
+          } else if (data.action === 'error') {
+            const errorMsg = getErrorMessage(data.errorCode);
+            error.value = `流式识别错误: ${data.errorCode} - ${errorMsg}`;
+            connectionStatus.value = '连接错误';
+            console.error('流式识别错误:', data);
+          }
+        } catch (err) {
+          console.error('解析消息失败:', err);
+        }
+      }
+    };
+
+    ws.onerror = (event) => {
+      error.value = t('Connection error');
+      connectionStatus.value = t('Connection error');
+      console.error('有道翻译WebSocket错误:', event);
+      reject(new Error('有道翻译WebSocket连接失败'));
+    };
+
+    ws.onclose = () => {
+      connectionStatus.value = t('Connection closed');
+      console.log('有道翻译WebSocket连接已关闭');
+      ws = null;
+    };
   });
+};
+
+const stopYoudaoTranslation = () => {
+  // 关闭有道翻译的WebSocket连接
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ end: 'true' }));
+    ws.close();
+    ws = null;
+  }
+
+  if (processor) {
+    processor.disconnect();
+    processor = null;
+  }
+
+  if (audioContext) {
+    audioContext.close();
+    audioContext = null;
+  }
+
+  // 停止音频流
+  if (stream) {
+    stream.getTracks().forEach((track: any) => {
+      track.stop();
+    });
+    stream = null;
+  }
+
+  isRecording.value = false;
+  connectionStatus.value = t('Connection closed');
 };
 
 // 获取麦克风音频流
@@ -364,156 +462,34 @@ const getMicrophoneStream = async () => {
   }
 };
 
-// 开始录音（作为被翻译的用户）
-const startRecording = async () => {
-  if (!hasValidConfig.value) {
-    error.value = t('Please configure Youdao API key')
-    return
-  }
-  
-  try {
-    error.value = ''
-    connectionStatus.value = t('Recording...')
+// SHA256
+const sha256 = async (str: string): Promise<string> => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+};
 
-    // 获取麦克风音频流
-    stream = await getMicrophoneStream();
-    console.log('音频流:', stream);
+// 生成签名
+const generateSign = async (
+  appKey: string,
+  salt: string,
+  curtime: string,
+  appSecret: string,
+): Promise<string> => {
+  const signStr = appKey + salt + curtime + appSecret;
+  return await sha256(signStr);
+};
 
-    // 如果还没有创建音频上下文，创建一个
-    if (!audioContext) {
-      audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-        sampleRate: 16000,
-      });
-    }
-
-    // 创建音频源
-    const source = audioContext.createMediaStreamSource(stream);
-
-    // 使用较小的缓冲区大小，确保实时性
-    processor = audioContext.createScriptProcessor(2048, 1, 1);
-
-    processor.onaudioprocess = (e: any) => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        const inputData = e.inputBuffer.getChannelData(0)
-        const audioData = new Int16Array(inputData.length)
-
-        // 转换音频数据为16位PCM格式
-        for (let i = 0; i < inputData.length; i++) {
-          // 将浮点数转换为16位整数，确保范围在-32768到32767之间
-          const sample = Math.max(-1, Math.min(1, inputData[i]));
-          audioData[i] = Math.round(sample * 32767);
-        }
-
-        // 检查音频数据是否有效（有声音）
-        const hasAudio = audioData.some(sample => Math.abs(sample) > 100);
-        if (hasAudio) {
-          console.log('发送音频数据，长度:', audioData.length);
-          ws.send(audioData.buffer)
-        }
-      }
-    }
-
-    source.connect(processor)
-    processor.connect(audioContext.destination)
-
-    await connectWebSocket()
-
-    isRecording.value = true
-    connectionStatus.value = t('Recording...')
-  } catch (err) {
-    error.value = `${t('Recording failed')}: ${err instanceof Error ? err.message : String(err)}`
-    connectionStatus.value = t('Connection failed')
-    console.error('录音失败:', err);
-  }
-}
-
-// 连接WebSocket
-const connectWebSocket = async (): Promise<void> => {
-  return new Promise(async (resolve, reject) => {
-    const salt = generateUUID()
-    const curtime = Math.floor(Date.now() / 1000).toString()
-    const sign = await generateSign(appKey, salt, curtime, appSecret)
-
-    const params = new URLSearchParams({
-      appKey: appKey,
-      salt,
-      curtime,
-      sign,
-      signType: 'v4',
-      from: apiFromLang.value,
-      to: apiToLang.value,
-      format: 'wav',
-      channel: '1',
-      version: 'v1',
-      rate: '16000',
-      streamEpType: 'short',
-      transPattern: 'sentence',
-      noitn: '0',
-    })
-
-    const wsUrl = `wss://openapi.youdao.com/stream_speech_trans?${params.toString()}`
-
-    console.log('有道翻译WebSocket连接URL:', wsUrl);
-    console.log('使用的语言设置:', { from: apiFromLang.value, to: apiToLang.value });
-
-    ws = new WebSocket(wsUrl)
-
-    ws.onopen = () => {
-      connectionStatus.value = t('Connected')
-      console.log('有道翻译WebSocket连接成功，语言设置:', { from: apiFromLang.value, to: apiToLang.value });
-      resolve()
-    }
-
-    ws.onmessage = (event) => {
-      if (typeof event.data === 'string') {
-        try {
-          const data = JSON.parse(event.data)
-          console.log('收到WebSocket消息:', data);
-          
-          if (data.action === 'started' && data.errorCode === '0') {
-            connectionStatus.value = '开始识别...'
-            console.log('开始识别成功');
-          } else if (data.action === 'recognition') {
-            if (data.result) {
-              const result = data.result
-              // 处理识别结果
-              if (result.context) {
-                console.log('识别结果:', result.context);
-              }
-              // 处理翻译结果
-              if (result.tranContent) {
-                console.log('翻译结果:', result.tranContent);
-                
-                // 发送翻译结果给所有正在请求我的用户
-                sendTranslationResultsToAll(result.context || '', result.tranContent);
-              }
-            } else if (data.action === 'error') {
-              const errorMsg = getErrorMessage(data.errorCode);
-              error.value = `识别错误: ${data.errorCode} - ${errorMsg}`
-              connectionStatus.value = '连接错误'
-              console.error('识别错误:', data);
-            }
-          }
-        } catch (err) {
-          console.error('解析消息失败:', err)
-        }
-      }
-    }
-
-    ws.onerror = (event) => {
-      error.value = t('Connection error')
-      connectionStatus.value = t('Connection error')
-      console.error('有道翻译WebSocket错误:', event);
-      reject(new Error('有道翻译WebSocket连接失败'))
-    }
-
-    ws.onclose = () => {
-      connectionStatus.value = t('Connection closed')
-      console.log('有道翻译WebSocket连接已关闭');
-      ws = null;
-    }
-  })
-}
+// 生成UUID
+const generateUUID = (): string => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
 
 // 获取错误信息
 const getErrorMessage = (errorCode: string): string => {
@@ -573,511 +549,364 @@ const getErrorMessage = (errorCode: string): string => {
   return errorMessages[errorCode] || t('Unknown error');
 };
 
-// 停止录音
-const stopRecording = () => {
-  // 只关闭有道翻译的WebSocket连接，不影响用户间通信的WebSocket
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ end: 'true' }))
-    ws.close()
-    ws = null;
-  }
-
-  if (processor) {
-    processor.disconnect()
-    processor = null
-  }
-
-  if (audioContext) {
-    audioContext.close()
-    audioContext = null
-  }
-
-  // 停止音频流
-  if (stream) {
-    stream.getTracks().forEach((track: any) => {
-      track.stop();
-    });
-    stream = null;
-  }
-
-  isRecording.value = false
-  connectionStatus.value = t('Connection closed')
-  currentTargetUser.value = null;
-  isInitiating.value = false;
-}
-
-// 停止有道翻译（只停止有道API，不关闭用户间WebSocket）
-const stopYoudaoTranslation = () => {
-  // 只关闭有道翻译的WebSocket连接，不影响用户间通信的WebSocket
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ end: 'true' }))
-    ws.close()
-    ws = null;
-  }
-
-  if (processor) {
-    processor.disconnect()
-    processor = null
-  }
-
-  if (audioContext) {
-    audioContext.close()
-    audioContext = null
-  }
-
-  // 停止音频流
-  if (stream) {
-    stream.getTracks().forEach((track: any) => {
-      track.stop();
-    });
-    stream = null;
-  }
-
-  isRecording.value = false
-  connectionStatus.value = t('Connection closed')
-  currentTargetUser.value = null;
-  isInitiating.value = false;
-}
-
-// 监听字幕变化
-watch(subtitleResults, (newResults, oldResults) => {
-  if (newResults.length > (oldResults?.length || 0)) {
-    addNewSubtitle();
-  }
-}, { deep: true });
-
-// 监听WebSocket翻译结果（作为接收者）
-const handleTranslationResult = (data: any) => {
-  if (data.fromUserId !== translationWebSocketService.getCurrentUserId()) {
-    // 收到其他用户的翻译结果
-    websocketTranslationResults.value.push({
-      original: data.data.original,
-      translation: data.data.translation,
-      timestamp: data.data.timestamp,
-    });
-    
-    console.log('收到WebSocket翻译结果:', data.data);
-  }
+// WebSocket事件处理
+const handleConnected = () => {
+  console.log('WebSocket连接成功');
+  connectionStatus.value = t('Connected');
+  // 更新响应式连接状态
+  updateConnectionStatus();
 };
 
-// 监听翻译广播（作为查看者）
+const handleDisconnected = () => {
+  console.log('WebSocket连接断开');
+  connectionStatus.value = t('Disconnected');
+  updateConnectionStatus();
+};
+
+const handleReconnecting = () => {
+  console.log('WebSocket重新连接中...');
+  connectionStatus.value = t('Reconnecting...');
+};
+
+const handleReconnected = () => {
+  console.log('WebSocket重新连接成功');
+  connectionStatus.value = t('Connected');
+  updateConnectionStatus();
+};
+
+const handleWebSocketError = (data: any) => {
+  console.error('WebSocket错误:', data);
+  error.value = data.message || t('WebSocket error');
+  connectionStatus.value = t('Connection error');
+};
+
 const handleTranslationBroadcast = (data: any) => {
   console.log('收到翻译广播:', data);
   
-  // 添加到翻译结果
-  websocketTranslationResults.value.push({
-    original: data.original,
-    translation: data.translation,
-    timestamp: data.timestamp,
-  });
-  
-  console.log('收到翻译广播结果:', data);
+  // 添加到全局字幕状态 - 传递双语数据
+  subtitleStore.addSubtitle(
+    data.zhText,        // 原文（中文）
+    data.jaText,        // 翻译（日文）
+    `用户${data.userId}` // 用户名
+  );
 };
 
-// 监听开始翻译指令（作为被翻译的用户）
-const handleStartTranslation = (data: any) => {
-  if (data.toUserId === translationWebSocketService.getCurrentUserId()) {
-    console.log('收到开始翻译指令:', data);
-    console.log('当前本地语言设置:', { fromLang: fromLang.value, toLang: toLang.value });
-    console.log('指令中的语言设置:', { fromLang: data.fromLang, toLang: data.toLang });
-    
-    // 新增一条被要求翻译的会话
-    activeIncomingSessions.value.set(data.fromUserId, {
-      fromUserId: data.fromUserId,
-      fromUserName: data.fromUserName || '发起用户',
-      fromLang: data.fromLang || 'zh-CHS',
-      toLang: data.toLang || 'ja',
-    });
-    
-    // 设置API专用的语言设置，不修改本地翻译设置
-    if (data.fromLang) {
-      apiFromLang.value = data.fromLang;
-      console.log('设置 apiFromLang:', data.fromLang);
+const handleUserJoin = (data: any) => {
+  console.log('用户加入:', data);
+};
+
+const handleUserLeave = (data: any) => {
+  console.log('用户离开:', data);
+};
+
+// 获取用户信息
+const getUserInfo = () => {
+  try {
+    const userInfoStr = sessionStorage.getItem('tuiRoom-userInfo');
+    console.log('sessionStorage中的用户信息:', userInfoStr);
+    if (userInfoStr) {
+      const userInfo = JSON.parse(userInfoStr);
+      console.log('解析后的用户信息:', userInfo);
+      return userInfo;
     }
-    if (data.toLang) {
-      apiToLang.value = data.toLang;
-      console.log('设置 apiToLang:', data.toLang);
+  } catch (error) {
+    console.error('获取用户信息失败:', error);
+  }
+  console.warn('未找到用户信息');
+  return null;
+};
+
+// 获取房间信息
+const getRoomInfo = () => {
+  try {
+    const roomInfoStr = sessionStorage.getItem('tuiRoom-roomInfo');
+    console.log('sessionStorage中的房间信息:', roomInfoStr);
+    if (roomInfoStr) {
+      const roomInfo = JSON.parse(roomInfoStr);
+      console.log('解析后的房间信息:', roomInfo);
+      return {
+        roomId: roomInfo.roomId
+      };
     }
+  } catch (error) {
+    console.error('获取房间信息失败:', error);
+  }
+  console.warn('未找到房间信息');
+  return null;
+};
+
+// 初始化WebSocket连接
+const initWebSocket = async () => {
+  try {
+    // 获取用户和房间信息
+    const userInfo = getUserInfo();
+    const roomInfo = getRoomInfo();
     
-    console.log('设置后的API语言设置:', { from: apiFromLang.value, to: apiToLang.value });
+    // 如果没有用户信息，使用默认值
+    const userId = userInfo?.userId || 'default-user-' + Date.now();
+    const userName = userInfo?.userName || '默认用户';
+    const roomId = roomInfo?.roomId || '000000'; // 默认房间ID
     
-    // 如果已经在录音，先停止当前连接
-    if (isRecording.value) {
-      console.log('停止当前翻译连接，使用新的语言设置重新连接');
-      stopYoudaoTranslation();
-    }
+    console.log('使用连接信息:', { userId, userName, roomId });
     
-    // 延迟一下确保连接完全关闭，然后重新开始录音
-    setTimeout(() => {
-      startRecording();
-    }, 100);
+    // 注册事件监听器
+    translationWebSocketService.on('connected', handleConnected);
+    translationWebSocketService.on('disconnected', handleDisconnected);
+    translationWebSocketService.on('reconnecting', handleReconnecting);
+    translationWebSocketService.on('reconnected', handleReconnected);
+    translationWebSocketService.on('error', handleWebSocketError);
+    translationWebSocketService.on('translation_broadcast', handleTranslationBroadcast);
+    translationWebSocketService.on('user_join', handleUserJoin);
+    translationWebSocketService.on('user_leave', handleUserLeave);
+    
+    await translationWebSocketService.connect(userId, userName, roomId);
+    
+  } catch (error) {
+    console.error('WebSocket连接失败:', error);
+    connectionStatus.value = t('Connection Failed');
+    error.value = t('Failed to connect to translation service');
   }
 };
 
-// 监听停止翻译指令（作为被翻译的用户停止翻译）
-const handleStopTranslation = (data: any) => {
-  if (data.toUserId === translationWebSocketService.getCurrentUserId()) {
-    console.log('收到停止翻译指令');
-    activeIncomingSessions.value.delete(data.fromUserId);
-    // 如果没有任何被要求翻译的会话了，才停止有道API
-    if (activeIncomingSessions.value.size === 0) {
-      stopYoudaoTranslation();
-    }
-  }
-};
-
-// 组件挂载时注册事件监听器
-const setupWebSocketListeners = () => {
-  translationWebSocketService.on('translation_result', handleTranslationResult);
-  translationWebSocketService.on('translation_broadcast', handleTranslationBroadcast);
-  translationWebSocketService.on('start_translation', handleStartTranslation);
-  translationWebSocketService.on('stop_translation', handleStopTranslation);
-};
-
-// 组件挂载时初始化WebSocket连接
+// 组件挂载时初始化
 onMounted(async () => {
-  // 注册事件监听器
-  setupWebSocketListeners();
-  
-  // 初始化WebSocket连接
   await initWebSocket();
-  
-  // 同步当前的翻译状态
-  syncTranslationState();
+  // 初始化连接状态
+  updateConnectionStatus();
 });
 
-// 组件卸载时清理资源
+// 组件卸载时清理
 onUnmounted(() => {
-  // 只停止有道翻译（作为被翻译者），不停止你发起的翻译
   if (isRecording.value) {
     stopYoudaoTranslation();
   }
   
-  // 不要停止你发起的翻译会话
-  // 让它们继续运行，直到目标用户主动停止
-  
-  translationWebSocketService.off('translation_result', handleTranslationResult);
+  // 移除事件监听器
+  translationWebSocketService.off('connected', handleConnected);
+  translationWebSocketService.off('disconnected', handleDisconnected);
+  translationWebSocketService.off('reconnecting', handleReconnecting);
+  translationWebSocketService.off('reconnected', handleReconnected);
+  translationWebSocketService.off('error', handleWebSocketError);
   translationWebSocketService.off('translation_broadcast', handleTranslationBroadcast);
-  translationWebSocketService.off('start_translation', handleStartTranslation);
-  translationWebSocketService.off('stop_translation', handleStopTranslation);
+  translationWebSocketService.off('user_join', handleUserJoin);
+  translationWebSocketService.off('user_leave', handleUserLeave);
   
-  // 注意：不要在这里断开用户间WebSocket连接，因为其他组件可能还在使用
-  // translationWebSocketService.disconnect();
+  // 断开WebSocket连接
+  translationWebSocketService.disconnect();
 });
-
-// 发送翻译结果给所有正在请求我的用户
-const sendTranslationResultsToAll = (original: string, translation: string) => {
-  // 获取当前用户的翻译会话
-  const currentUserId = translationWebSocketService.getCurrentUserId();
-  const currentRoomId = translationWebSocketService.getCurrentRoomId();
-  
-  // 查找当前用户正在被翻译的会话
-  for (const [fromUserId, session] of activeIncomingSessions.value.entries()) {
-    const sessionId = `${currentRoomId}_${fromUserId}_${currentUserId}`;
-    translationWebSocketService.sendTranslationResult(sessionId, original, translation, currentUserId);
-  }
-};
 </script>
 
 <style scoped>
-.translator-widget {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  width: 420px; /* 从380px增加到420px */
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 14px;
-  color: #333;
+.realtime-translator {
+  padding: 24px;
+  background: white;
+  border-radius: 0;
+  width: 100%;
+  height: 100%;
 }
 
-.translator-content {
-  padding: 16px;
-}
-
-.section-title {
-  font-weight: 600;
-  font-size: 14px;
-  color: #495057;
-  margin-bottom: 8px;
-}
-
-.user-selection {
-  margin-bottom: 16px;
-}
-
-.language-controls {
-  margin-bottom: 16px;
-}
-
-.lang-selector {
+.connection-status {
+  margin-bottom: 15px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
-.lang-select {
-  flex: 1;
-  padding: 6px 8px;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  font-size: 14px;
-  background: #fff;
-  color: #495057;
-}
-
-.lang-select:disabled {
-  background: #f8f9fa;
-  color: #6c757d;
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.lang-select:disabled:hover {
-  border-color: #dee2e6;
-}
-
-.arrow {
-  color: #6c757d;
-  font-size: 14px;
-}
-
-.action-buttons {
+.streaming-mode-info {
   display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
+  align-items: center;
 }
 
-.btn {
-  flex: 1;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
+.mode-badge {
+  background: #007acc;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
   font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
 }
 
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.status-indicator {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  background: #ff4444;
+  color: white;
 }
 
-.btn-stop {
-  background: #dc3545;
-  color: #fff;
-}
-
-.btn-stop:hover {
-  background: #c82333;
+.status-indicator.connected {
+  background: #44ff44;
+  color: black;
 }
 
 .error-message {
-  margin-top: 8px;
-  padding: 8px 12px;
-  background: #f8d7da;
-  border: 1px solid #f5c6cb;
-  border-radius: 6px;
-  color: #721c24;
-  font-size: 13px;
+  color: #ff4444;
+  margin-bottom: 15px;
+  padding: 10px;
+  background: #ffe6e6;
+  border-radius: 4px;
 }
 
-@media (max-width: 768px) {
-  .translator-widget {
-    top: 10px;
-    right: 10px;
-    left: 10px;
-    width: auto;
-  }
+.language-config-panel {
+  margin-bottom: 20px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border: 1px solid #e9ecef;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* 字幕样式 */
-.subtitle-container {
-  position: fixed;
-  bottom: 80px;
-  left: 0;
-  right: 0;
-  z-index: 1001;
-  padding: 0 20px;
-  pointer-events: none;
+.config-header h4 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 18px;
+  color: #343a40;
 }
 
-.subtitle-content {
-  max-width: 800px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.subtitle-item {
-  background: rgba(0, 0, 0, 0.8);
-  border-radius: 8px;
-  padding: 12px 16px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.subtitle-original {
-  color: #fff;
-  font-size: 16px;
-  font-weight: 500;
-  margin-bottom: 4px;
-  line-height: 1.4;
-}
-
-.subtitle-translation {
-  color: #ffd700;
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.3;
-  opacity: 0.9;
-}
-
-/* 翻译历史记录样式 */
-.translation-history {
-  position: fixed;
-  width: 300px;
-  max-height: 400px; /* 限制高度，只显示约5条记录 */
-  background: rgba(0, 0, 0, 0.7);
-  border-radius: 8px;
-  backdrop-filter: blur(10px);
-  z-index: 999;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 13px;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  user-select: none; /* 防止拖拽时选中文字 */
-}
-
-.history-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 8px 8px 0 0;
-  cursor: move; /* 显示拖拽光标 */
-  user-select: none;
-}
-
-.history-header:hover {
-  background: rgba(0, 0, 0, 0.4);
-}
-
-.history-title {
-  font-weight: 500;
-  font-size: 12px;
-  color: #fff;
-  pointer-events: none; /* 防止标题文字影响拖拽 */
-}
-
-.clear-history-btn {
-  background: none;
-  border: none;
-  color: #ccc;
-  font-size: 16px;
-  cursor: pointer;
-  padding: 0;
-  width: 20px;
-  height: 20px;
+.language-selector {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  transition: all 0.2s;
-  pointer-events: auto; /* 确保按钮可以点击 */
+  gap: 20px;
+  margin-bottom: 20px;
+  padding: 15px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
 }
 
-.clear-history-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+.language-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
 }
 
-.history-content {
-  max-height: 340px;
-  overflow-y: auto;
-  padding: 8px 0;
+.language-group label {
+  font-size: 14px;
+  color: #495057;
 }
 
-.history-content::-webkit-scrollbar {
-  width: 4px;
+.language-group select {
+  padding: 10px 12px;
+  border: 2px solid #e1e5e9;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #333;
+  background-color: #fff;
+  cursor: pointer;
+  transition: border-color 0.3s;
+  min-width: 100px;
 }
 
-.history-content::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+.language-group select:focus {
+  outline: none;
+  border-color: #007bff;
 }
 
-.history-content::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 2px;
+.arrow {
+  font-size: 24px;
+  font-weight: bold;
+  color: #007bff;
+  margin: 0 10px;
 }
 
-.history-content::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
+.config-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
 }
 
-.history-item {
-  padding: 8px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  transition: background-color 0.2s;
+.save-btn, .reset-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
 }
 
-.history-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+.save-btn {
+  background: #28a745;
+  color: white;
 }
 
-.history-item:last-child {
-  border-bottom: none;
+.save-btn:hover {
+  background: #218838;
 }
 
-.history-text {
-  color: #fff;
-  font-size: 13px;
-  line-height: 1.4;
-  margin-bottom: 4px;
-  word-wrap: break-word;
+.reset-btn {
+  background: #6c757d;
+  color: white;
 }
 
-.history-time {
-  color: #ccc;
-  font-size: 11px;
-  opacity: 0.7;
+.reset-btn:hover {
+  background: #5a6268;
 }
 
-@media (max-width: 768px) {
-  .translation-history {
-    width: calc(100vw - 20px);
-    max-width: 300px;
-    max-height: 150px;
+@media (max-width: 480px) {
+  .language-selector {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .arrow {
+    transform: rotate(90deg);
+    margin: 5px 0;
+  }
+  
+  .config-actions {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .language-group {
+    min-width: auto;
+    width: 100%;
+  }
+  
+  .language-group select {
+    width: 100%;
+    min-width: auto;
   }
 }
 
-/* 字幕淡入淡出动画 */
-.subtitle-fade-enter-active,
-.subtitle-fade-leave-active {
-  transition: all 0.8s ease;
+.translation-controls {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
 }
 
-.subtitle-fade-enter-from {
-  opacity: 0;
-  transform: translateY(20px);
+.record-btn {
+  padding: 12px 30px;
+  border: none;
+  border-radius: 8px;
+  background: #007bff;
+  color: white;
+  cursor: pointer;
+  transition: background 0.3s;
+  font-size: 16px;
+  font-weight: 500;
 }
 
-.subtitle-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-20px);
+.record-btn:hover:not(:disabled) {
+  background: #0056b3;
 }
 
-.subtitle-item.fade-out {
-  opacity: 0;
-  transform: translateY(-10px);
-  transition: all 0.5s ease;
+.record-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
 }
+
+.record-btn.recording {
+  background: #dc3545;
+}
+
+.record-btn.recording:hover {
+  background: #c82333;
+}
+
+
 </style> 
