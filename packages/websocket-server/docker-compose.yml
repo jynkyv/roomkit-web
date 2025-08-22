@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  websocket-server:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - CORS_ORIGIN=*
+      - HEARTBEAT_INTERVAL=30000
+      - HEARTBEAT_TIMEOUT=60000
+      - ROOM_TIMEOUT=1800000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - websocket-network
+
+networks:
+  websocket-network:
+    driver: bridge
