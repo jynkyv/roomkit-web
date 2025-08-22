@@ -1,50 +1,32 @@
+import { io, Socket } from 'socket.io-client';
 import { getWebSocketUrl } from '../config/websocket';
 
-// 翻译WebSocket服务
+// 简化的翻译用户接口
 export interface TranslationUser {
   id: string;
   name: string;
+  roomId: string;
   isOnline: boolean;
-  roomId?: string;
-  translationStatus?: TranslationStatus; // 新增翻译状态
+  lastSeen: number;
 }
 
-export interface TranslationStatus {
-  sessionId: string;
-  initiatorUserId: string;
-  fromLang: string;
-  toLang: string;
-  isActive: boolean;
-  viewers?: string[]; // 新增查看者列表
-}
-
-export interface TranslationSession {
-  sessionId: string;
-  targetUserId: string;
-  initiatorUserId: string;
-  viewers: string[];
-  fromLang: string;
-  toLang: string;
-  isActive: boolean;
-}
-
-export interface TranslationCommand {
-  type: 'start_translation_session' | 'stop_translation_session' | 'join_translation_view' | 'leave_translation_view' | 'translation_result';
-  fromUserId: string;
-  toUserId: string;
-  data?: any;
-}
-
-export interface TranslationResult {
-  original: string;
-  translation: string;
+// 简化的翻译消息接口
+export interface TranslationMessage {
+  zhText: string;
+  jaText: string;
+  userId: string;
   timestamp: number;
-  fromUserId: string;
-  toUserId: string;
+}
+
+// 系统消息接口
+export interface SystemMessage {
+  type: 'user_join' | 'user_leave' | 'heartbeat' | 'room_status';
+  roomId: string;
+  data: any;
 }
 
 class TranslationWebSocketService {
-  private ws: WebSocket | null = null;
+  private socket: Socket | null = null;
   private currentUserId: string = '';
   private currentRoomId: string = '';
   private users: Map<string, TranslationUser> = new Map();
@@ -52,280 +34,195 @@ class TranslationWebSocketService {
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
   private reconnectInterval: number = 3000;
+  private heartbeatInterval: number = 30000;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
   private eventListeners: Map<string, Function[]> = new Map();
-  
-  // 翻译会话管理
-  private translationSessions: Map<string, TranslationSession> = new Map();
-  private userTranslationStatus: Map<string, TranslationStatus> = new Map();
 
   // 初始化WebSocket连接
   async connect(userId: string, userName: string, roomId: string): Promise<void> {
     this.currentUserId = userId;
     this.currentRoomId = roomId;
     
-    // 添加当前用户到用户列表
-    this.users.set(userId, {
-      id: userId,
-      name: userName,
-      isOnline: true,
-      roomId: roomId
-    });
-
     return new Promise((resolve, reject) => {
       try {
-        // 使用配置文件获取WebSocket地址
         const wsUrl = getWebSocketUrl();
         
-        this.ws = new WebSocket(wsUrl);
+        // 使用Socket.IO客户端
+        this.socket = io(wsUrl, {
+          path: '/translation',
+          transports: ['websocket'],
+          timeout: 20000,
+          reconnection: true,
+          reconnectionAttempts: this.maxReconnectAttempts,
+          reconnectionDelay: this.reconnectInterval,
+        });
 
-        this.ws.onopen = () => {
-          console.log('用户间通信WebSocket连接成功');
+        this.socket.on('connect', () => {
+          console.log('翻译WebSocket连接成功');
           this.isConnected = true;
           this.reconnectAttempts = 0;
           
-          // 延迟发送用户上线消息，确保连接状态已更新
-          setTimeout(() => {
-            this.sendMessage({
-              type: 'user_online',
-              userId: userId,
-              userName: userName,
-              roomId: roomId
-            });
-          }, 100);
+          // 发送用户上线消息
+          this.sendUserOnline(userId, userName, roomId);
+          
+          // 启动心跳
+          this.startHeartbeat();
           
           resolve();
-        };
+        });
 
-        this.ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            this.handleMessage(data);
-          } catch (error) {
-            console.error('解析WebSocket消息失败:', error);
+        this.socket.on('disconnect', (reason) => {
+          console.log('翻译WebSocket连接断开:', reason);
+          this.isConnected = false;
+          this.stopHeartbeat();
+          this.emit('disconnected', { reason });
+          
+          if (reason === 'io server disconnect') {
+            // 服务器主动断开，尝试重连
+            this.socket?.connect();
           }
-        };
+        });
 
-        this.ws.onerror = (error) => {
-          console.error('用户间通信WebSocket连接错误:', error);
+        this.socket.on('connect_error', (error) => {
+          console.error('翻译WebSocket连接错误:', error);
           this.isConnected = false;
+          this.emit('error', { message: error.message || '连接错误' });
           reject(error);
-        };
+        });
 
-        this.ws.onclose = () => {
-          console.log('用户间通信WebSocket连接已关闭');
-          this.isConnected = false;
-          this.handleReconnect();
-        };
-
+        // 监听消息
+        this.setupMessageHandlers();
+        
       } catch (error) {
-        console.error('创建用户间通信WebSocket连接失败:', error);
+        console.error('创建翻译WebSocket连接失败:', error);
         reject(error);
       }
     });
   }
 
-  // 处理接收到的消息
-  private handleMessage(data: any) {
-    console.log('收到WebSocket消息:', data);
+  private setupMessageHandlers() {
+    if (!this.socket) return;
 
-    switch (data.type) {
-      case 'user_list':
-        this.updateUserList(data.users);
-        break;
-      case 'user_online':
-        this.addUser(data.user);
-        break;
-      case 'user_offline':
-        this.removeUser(data.userId);
-        break;
-      case 'start_translation':
-        this.emit('start_translation', data);
-        break;
-      case 'stop_translation':
-        this.emit('stop_translation', data);
-        break;
-      case 'translation_result':
-        this.emit('translation_result', data);
-        break;
-      case 'translation_broadcast':
-        this.emit('translation_broadcast', data);
-        break;
-      case 'translation_status_update':
-        this.updateTranslationStatus(data.statusMap);
-        break;
-      case 'room_translation_status':
-        this.updateTranslationStatus(data.statusMap);
-        break;
-      default:
-        console.log('未知消息类型:', data.type);
-    }
+    this.socket.on('connected', (data) => {
+      console.log('WebSocket连接确认:', data);
+      this.emit('connected', data);
+    });
+
+    this.socket.on('user_join', (data) => {
+      console.log('用户加入:', data);
+      this.addUser({
+        id: data.userId,
+        name: data.userName,
+        roomId: data.roomId,
+        isOnline: true,
+        lastSeen: data.timestamp,
+      });
+      this.emit('user_join', data);
+    });
+
+    this.socket.on('user_leave', (data) => {
+      console.log('用户离开:', data);
+      this.removeUser(data.userId);
+      this.emit('user_leave', data);
+    });
+
+    this.socket.on('user_list', (data) => {
+      console.log('收到用户列表:', data);
+      this.updateUserList(data.users);
+      this.emit('user_list_updated', data.users);
+    });
+
+    this.socket.on('translation_broadcast', (data: TranslationMessage) => {
+      console.log('收到翻译广播:', data);
+      this.emit('translation_broadcast', data);
+    });
+
+    this.socket.on('heartbeat_ack', (data) => {
+      console.log('心跳确认:', data);
+    });
+
+    this.socket.on('error', (data) => {
+      console.error('WebSocket错误:', data);
+      this.emit('error', data);
+    });
   }
 
-  // 发送消息
-  sendMessage(message: any): void {
-    console.log('尝试发送消息:', message, '连接状态:', this.isConnected, 'WebSocket状态:', this.ws?.readyState);
-    
-    if (this.ws && this.ws.readyState === WebSocket.OPEN && this.isConnected) {
-      this.ws.send(JSON.stringify(message));
-      console.log('消息发送成功');
+  private sendUserOnline(userId: string, userName: string, roomId: string): void {
+    this.sendMessage('user_online', {
+      userId,
+      userName,
+      roomId,
+    });
+  }
+
+  // 发送翻译消息
+  sendTranslationMessage(zhText: string, jaText: string): void {
+    this.sendMessage('translation_message', {
+      zhText,
+      jaText,
+      userId: this.currentUserId,
+      timestamp: Date.now(),
+    });
+  }
+
+  // 发送心跳
+  private sendHeartbeat(): void {
+    this.sendMessage('heartbeat', {});
+  }
+
+  // 请求用户列表
+  requestUserList(): void {
+    this.sendMessage('request_user_list', {});
+  }
+
+  // 通用消息发送方法
+  private sendMessage(type: string, data: any): void {
+    if (this.socket && this.isConnected) {
+      this.socket.emit(type, data);
+      console.log('发送消息:', type, data);
     } else {
-      console.error('用户间通信WebSocket未连接，无法发送消息');
-      console.error('WebSocket状态:', this.ws?.readyState, '连接状态:', this.isConnected);
-      
-      // 如果连接未建立，尝试重新连接
-      if (this.currentUserId && this.currentRoomId) {
-        console.log('尝试重新连接WebSocket...');
-        this.connect(this.currentUserId, this.users.get(this.currentUserId)?.name || 'Unknown', this.currentRoomId);
-      }
+      console.error('WebSocket未连接，无法发送消息');
     }
   }
 
-  // 开始翻译会话
-  startTranslationSession(targetUserId: string, fromLang: string, toLang: string): void {
-    console.log('开始翻译会话:', { targetUserId, fromLang, toLang });
-    this.sendMessage({
-      type: 'start_translation_session',
-      targetUserId,
-      fromLang,
-      toLang
-    });
+  // 启动心跳
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      this.sendHeartbeat();
+    }, this.heartbeatInterval);
   }
 
-  // 停止翻译会话
-  stopTranslationSession(sessionId: string): void {
-    console.log('停止翻译会话:', sessionId);
-    this.sendMessage({
-      type: 'stop_translation_session',
-      sessionId
-    });
-  }
-
-  // 加入翻译查看
-  joinTranslationView(sessionId: string): void {
-    console.log('加入翻译查看:', sessionId);
-    this.sendMessage({
-      type: 'join_translation_view',
-      sessionId
-    });
-  }
-
-  // 离开翻译查看
-  leaveTranslationView(sessionId: string): void {
-    console.log('离开翻译查看:', sessionId);
-    this.sendMessage({
-      type: 'leave_translation_view',
-      sessionId
-    });
-  }
-
-  // 发送翻译结果
-  sendTranslationResult(sessionId: string, original: string, translation: string, fromUserId: string): void {
-    this.sendMessage({
-      type: 'translation_result',
-      sessionId,
-      original,
-      translation,
-      fromUserId
-    });
-  }
-
-  // 更新翻译状态
-  private updateTranslationStatus(statusMap: Record<string, TranslationStatus>): void {
-    this.userTranslationStatus.clear();
-    Object.entries(statusMap).forEach(([userId, status]) => {
-      this.userTranslationStatus.set(userId, status);
-    });
-    
-    // 更新用户列表中的翻译状态
-    this.users.forEach((user, userId) => {
-      const status = this.userTranslationStatus.get(userId);
-      if (status) {
-        user.translationStatus = status;
-      } else {
-        delete user.translationStatus;
-      }
-    });
-    
-    this.emit('translation_status_updated', statusMap);
-  }
-
-  // 获取用户翻译状态
-  getUserTranslationStatus(userId: string): TranslationStatus | null {
-    return this.userTranslationStatus.get(userId) || null;
-  }
-
-  // 检查用户是否正在被翻译
-  isUserBeingTranslated(userId: string): boolean {
-    const status = this.getUserTranslationStatus(userId);
-    return status ? status.isActive : false;
-  }
-
-  // 检查当前用户是否是翻译发起者
-  isCurrentUserInitiator(userId: string): boolean {
-    const status = this.getUserTranslationStatus(userId);
-    return status ? status.initiatorUserId === this.currentUserId : false;
-  }
-
-  // 检查当前用户是否是翻译查看者
-  isCurrentUserViewer(sessionId: string): boolean {
-    const session = this.translationSessions.get(sessionId);
-    return session ? session.viewers.includes(this.currentUserId) : false;
+  // 停止心跳
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
   }
 
   // 更新用户列表
   private updateUserList(users: TranslationUser[]): void {
     this.users.clear();
-    
-    // 同步更新翻译状态
-    this.userTranslationStatus.clear();
-    
     users.forEach(user => {
       this.users.set(user.id, user);
-      
-      // 如果用户有翻译状态，同步到userTranslationStatus
-      if (user.translationStatus) {
-        this.userTranslationStatus.set(user.id, user.translationStatus);
-      }
     });
-    
-    this.emit('user_list_updated', Array.from(this.users.values()));
   }
 
   // 添加用户
   private addUser(user: TranslationUser): void {
     this.users.set(user.id, user);
-    
-    // 如果用户有翻译状态，同步到userTranslationStatus
-    if (user.translationStatus) {
-      this.userTranslationStatus.set(user.id, user.translationStatus);
-    }
-    
-    this.emit('user_added', user);
   }
 
   // 移除用户
   private removeUser(userId: string): void {
     this.users.delete(userId);
-    this.userTranslationStatus.delete(userId);
-    this.emit('user_removed', userId);
   }
 
-  // 获取用户列表（只返回同房间的用户）
+  // 获取用户列表（排除当前用户）
   getUsers(): TranslationUser[] {
     return Array.from(this.users.values())
-      .filter(user => user.id !== this.currentUserId && user.roomId === this.currentRoomId);
-  }
-
-  // 刷新用户列表
-  refreshUserList(): void {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.sendMessage({
-        type: 'request_user_list'
-      });
-      console.log('发送刷新用户列表请求');
-    } else {
-      console.error('用户间通信WebSocket未连接，无法刷新用户列表');
-    }
+      .filter(user => user.id !== this.currentUserId);
   }
 
   // 获取当前用户ID
@@ -341,20 +238,6 @@ class TranslationWebSocketService {
   // 检查连接状态
   isWebSocketConnected(): boolean {
     return this.isConnected;
-  }
-
-  // 重连处理
-  private handleReconnect(): void {
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++;
-      console.log(`尝试重连用户间通信WebSocket... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-      
-      setTimeout(() => {
-        this.connect(this.currentUserId, this.users.get(this.currentUserId)?.name || 'Unknown', this.currentRoomId);
-      }, this.reconnectInterval);
-    } else {
-      console.error('用户间通信WebSocket重连失败，已达到最大重试次数');
-    }
   }
 
   // 事件监听器管理
@@ -391,14 +274,15 @@ class TranslationWebSocketService {
 
   // 断开连接
   disconnect(): void {
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
+    this.stopHeartbeat();
+    
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
     }
+    
     this.isConnected = false;
     this.users.clear();
-    this.translationSessions.clear();
-    this.userTranslationStatus.clear();
     this.eventListeners.clear();
   }
 }
