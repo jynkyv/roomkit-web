@@ -1,81 +1,21 @@
 <template>
-  <div class="room-container" :class="{ 'with-history': showHistoryPanel }">
+  <div class="room-container">
     <!-- 左侧会议内容 -->
     <div class="room-content">
       <!-- 现有的房间组件 -->
       <conference-main-view display-mode="permanent"></conference-main-view>
-    </div>
-    
-    <!-- 右侧翻译历史面板 -->
-    <div v-show="showHistoryPanel" class="history-panel">
-      <div class="panel-header">
-        <div class="header-tabs">
-          <div class="tab active">{{ t('Translation History') }}</div>
-        </div>
-        <div class="header-actions">
-          <button class="clear-btn" @click="clearHistory" :title="t('Clear history')">
-            <span class="clear-icon">🗑️</span>
-          </button>
-          <button class="close-btn" @click="toggleHistoryPanel">×</button>
-        </div>
-      </div>
-      
-      <div class="panel-content">
-        <div v-if="translationHistory.length === 0" class="empty-history">
-          <div class="empty-icon">📝</div>
-          <p>{{ t('No translation history yet') }}</p>
-        </div>
-        <div v-else class="history-list">
-          <div 
-            v-for="(item, index) in translationHistory" 
-            :key="item.id"
-            class="history-item"
-          >
-            <div class="history-user">{{ item.userId }}</div>
-            <div class="history-original">{{ item.original }}</div>
-            <div class="history-translation">{{ item.translation }}</div>
-            <div class="history-time">{{ formatTime(item.timestamp) }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- WebSocket连接错误提示 -->
-    <div v-if="showWebSocketError" class="websocket-error-overlay">
-      <div class="websocket-error-modal">
-        <div class="error-header">
-          <h3>{{ t('Connection Error') }}</h3>
-        </div>
-        <div class="error-content">
-          <p>{{ t('WebSocket connection failed. This may be due to browser cache issues.') }}</p>
-          <p>{{ t('Please try the following solutions:') }}</p>
-          <ul>
-            <li>{{ t('1. Clear browser cache and refresh the page') }}</li>
-            <li>{{ t('2. Try using incognito/private browsing mode') }}</li>
-            <li>{{ t('3. Restart the browser') }}</li>
-          </ul>
-        </div>
-        <div class="error-actions">
-          <button @click="clearCacheAndRetry" class="btn-retry">
-            {{ t('Clear Cache & Retry') }}
-          </button>
-          <button @click="dismissError" class="btn-dismiss">
-            {{ t('Dismiss') }}
-          </button>
-        </div>
-      </div>
     </div>
 
     <!-- 字幕显示 -->
     <div class="subtitle-container" v-if="currentSubtitle">
       <div class="subtitle-content">
         <div class="subtitle-item" :key="currentSubtitle.id">
+          <div class="subtitle-user" v-if="currentSubtitle.userName">{{ currentSubtitle.userName }}</div>
           <div class="subtitle-original">{{ currentSubtitle.original }}</div>
           <div class="subtitle-translation">{{ currentSubtitle.translation }}</div>
         </div>
       </div>
     </div>
-
 
   </div>
 </template>
@@ -96,28 +36,16 @@ const { theme } = useUIKit();
 
 
 // 字幕相关状态
-const currentSubtitle = ref<{ original: string; translation: string; id: number; timestamp: number } | null>(null);
+const currentSubtitle = ref<{ original: string; translation: string; id: number; timestamp: number; userName?: string } | null>(null);
 const subtitleTimeout = ref<number | null>(null);
-
-// 翻译历史相关状态
-const showHistoryPanel = ref(false);
-const translationHistory = ref<Array<{
-  id: string;
-  original: string;
-  translation: string;
-  userId: string;
-  timestamp: number;
-}>>([]);
-
 
 
 // WebSocket连接错误提示状态
-const showWebSocketError = ref(false);
-
+// const showWebSocketError = ref(false); // Removed
 
 
 // 新字幕到来时显示并自动淡出
-const showSubtitle = (original: string, translation: string) => {
+const showSubtitle = (original: string, translation: string, userName?: string) => {
   if (subtitleTimeout.value) {
     clearTimeout(subtitleTimeout.value);
     subtitleTimeout.value = null;
@@ -127,6 +55,7 @@ const showSubtitle = (original: string, translation: string) => {
     translation,
     id: Date.now(),
     timestamp: Date.now(),
+    userName: userName || '未知用户',
   };
   // 5秒后自动隐藏
   subtitleTimeout.value = window.setTimeout(() => {
@@ -134,36 +63,6 @@ const showSubtitle = (original: string, translation: string) => {
     subtitleTimeout.value = null;
   }, 5000);
 };
-
-// 翻译历史相关方法
-const toggleHistoryPanel = () => {
-  showHistoryPanel.value = !showHistoryPanel.value;
-};
-
-const clearHistory = () => {
-  translationHistory.value = [];
-  // 触发全局事件，通知其他组件
-  window.dispatchEvent(new CustomEvent('clear-translation-history'));
-};
-
-const formatTime = (timestamp: number): string => {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-  
-  if (diff < 60000) { // 1分钟内
-    return t('Just now');
-  } else if (diff < 3600000) { // 1小时内
-    const minutes = Math.floor(diff / 60000);
-    return `${minutes}${t('min ago')}`;
-  } else if (diff < 86400000) { // 24小时内
-    const hours = Math.floor(diff / 3600000);
-    return `${hours}${t('h ago')}`;
-  } else {
-    return date.toLocaleDateString();
-  }
-};
-
 
 
 // 监听WebSocket翻译结果
@@ -177,24 +76,13 @@ const handleTranslationResult = (data: any) => {
 const handleTranslationBroadcast = (data: any) => {
   console.log('收到翻译广播:', data);
   
-  // 显示字幕
-  showSubtitle(data.zhText, data.jaText);
+  // 获取当前用户信息，判断是否是自己发送的消息
+  const currentUserInfo = getUserInfo();
+  const isOwnMessage = currentUserInfo && data.userId === currentUserInfo.userId;
   
-  // 添加到翻译历史
-  const historyItem = {
-    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-    original: data.zhText,
-    translation: data.jaText,
-    userId: data.userId,
-    timestamp: data.timestamp || Date.now(),
-  };
-  
-  translationHistory.value.unshift(historyItem);
-  
-  // 限制最多显示100条记录
-  if (translationHistory.value.length > 100) {
-    translationHistory.value = translationHistory.value.slice(0, 100);
-  }
+  // 显示字幕，使用实际的用户名而不是"我"
+  const displayUserName = data.userName || '未知用户';
+  showSubtitle(data.zhText, data.jaText, displayUserName);
 };
 
 // 处理用户加入
@@ -237,7 +125,6 @@ const initWebSocket = async () => {
     
   } catch (error) {
     console.error('WebSocket连接失败:', error);
-    showWebSocketErrorModal();
   }
 };
 
@@ -312,41 +199,41 @@ const cleanupUserInfo = () => {
 };
 
 // 显示WebSocket连接错误提示
-const showWebSocketErrorModal = () => {
-  showWebSocketError.value = true;
-  
-  // 输出调试信息到控制台
-  console.log('=== WebSocket连接问题诊断信息 ===');
-  console.log('当前URL:', window.location.href);
-  console.log('User Agent:', navigator.userAgent);
-  console.log('sessionStorage内容:');
-  for (let i = 0; i < sessionStorage.length; i++) {
-    const key = sessionStorage.key(i);
-    if (key) {
-      console.log(`  ${key}:`, sessionStorage.getItem(key));
-    }
-  }
-  console.log('localStorage内容:');
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key) {
-      console.log(`  ${key}:`, localStorage.getItem(key));
-    }
-  }
-  console.log('=== 诊断信息结束 ===');
-};
+// const showWebSocketErrorModal = () => { // Removed
+//   // showWebSocketError.value = true; // Removed
+//   
+//   // 输出调试信息到控制台
+//   console.log('=== WebSocket连接问题诊断信息 ===');
+//   console.log('当前URL:', window.location.href);
+//   console.log('User Agent:', navigator.userAgent);
+//   console.log('sessionStorage内容:');
+//   for (let i = 0; i < sessionStorage.length; i++) {
+//     const key = sessionStorage.key(i);
+//     if (key) {
+//       console.log(`  ${key}:`, sessionStorage.getItem(key));
+//     }
+//   }
+//   console.log('localStorage内容:');
+//   for (let i = 0; i < localStorage.length; i++) {
+//     const key = localStorage.key(i);
+//     if (key) {
+//       console.log(`  ${key}:`, localStorage.getItem(key));
+//     }
+//   }
+//   console.log('=== 诊断信息结束 ===');
+// };
 
 // 清除缓存并重试WebSocket连接
-const clearCacheAndRetry = () => {
-  clearBrowserCache();
-  showWebSocketError.value = false;
-  initWebSocket(); // 重新尝试连接
-};
+// const clearCacheAndRetry = () => { // Removed
+//   clearBrowserCache();
+//   // showWebSocketError.value = false; // Removed
+//   initWebSocket(); // 重新尝试连接
+// };
 
 // 关闭WebSocket连接错误提示
-const dismissError = () => {
-  showWebSocketError.value = false;
-};
+// const dismissError = () => { // Removed
+//   // showWebSocketError.value = false; // Removed
+// };
 
 const route = useRoute();
 const roomInfo = sessionStorage.getItem('tuiRoom-roomInfo');
@@ -369,17 +256,37 @@ onMounted(async () => {
   cleanupUserInfo();
   
   // 监听历史面板切换事件
-  window.addEventListener('toggle-history-panel', (event: any) => {
-    showHistoryPanel.value = event.detail.show;
-  });
+  // window.addEventListener('toggle-history-panel', (event: any) => {
+  //   // showHistoryPanel.value = event.detail.show; // Removed
+  // });
   
   // 监听清空历史事件
-  window.addEventListener('clear-translation-history', () => {
-    translationHistory.value = [];
-  });
+  // window.addEventListener('clear-translation-history', () => {
+  //   // translationHistory.value = []; // Removed
+  // });
   
-  const { action, isSeatEnabled, roomParam, hasCreated } = JSON.parse(roomInfo as string);
-  const { sdkAppId, userId, userSig, userName, avatarUrl } = JSON.parse(userInfo as string);
+  const userInfo = getUserInfo();
+  const roomInfo = getRoomInfo();
+  
+  if (!userInfo || !roomInfo) {
+    console.error('无法获取用户或房间信息');
+    return;
+  }
+  
+  // 从sessionStorage获取完整的用户和房间信息
+  const userInfoStr = sessionStorage.getItem('tuiRoom-userInfo');
+  const roomInfoStr = sessionStorage.getItem('tuiRoom-roomInfo');
+  
+  if (!userInfoStr || !roomInfoStr) {
+    console.error('sessionStorage中缺少用户或房间信息');
+    return;
+  }
+  
+  const fullUserInfo = JSON.parse(userInfoStr);
+  const fullRoomInfo = JSON.parse(roomInfoStr);
+  
+  const { action, isSeatEnabled, roomParam, hasCreated } = fullRoomInfo;
+  const { sdkAppId, userId, userSig, userName, avatarUrl } = fullUserInfo;
   if (action === 'createRoom') {
     isMaster = true;
   }
@@ -417,10 +324,6 @@ onUnmounted(() => {
   translationWebSocketService.off('user_join', handleUserJoin);
   translationWebSocketService.off('user_leave', handleUserLeave);
   translationWebSocketService.off('error', handleError);
-  
-  // 移除事件监听器
-  window.removeEventListener('toggle-history-panel', () => {});
-  window.removeEventListener('clear-translation-history', () => {});
 });
 
 onBeforeRouteLeave((to: any, from: any, next: any) => {
@@ -510,328 +413,59 @@ const goToPage = (routePath: string) => {
   flex-direction: row;
 }
 
-.room-container.with-history {
-  /* 当显示历史面板时，调整布局 */
-}
-
 .room-content {
   flex: 1;
   min-width: 0; /* 防止flex子元素溢出 */
-  transition: width 0.3s ease;
-}
-
-.room-container.with-history .room-content {
-  width: calc(100% - 400px); /* 当显示历史面板时，会议内容占剩余空间 */
-}
-
-
-
-.room-content {
   width: 100%;
   height: 100%;
-}
-
-/* 翻译历史面板样式 */
-.history-panel {
-  width: 400px;
-  height: 100vh;
-  background: #1e1e1e;
-  color: #d4d4d4;
-  display: flex;
-  flex-direction: column;
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-  font-size: 13px;
-  border-left: 1px solid #3c3c3c;
-  flex-shrink: 0;
-}
-
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  background: #2d2d30;
-  border-bottom: 1px solid #3c3c3c;
-  flex-shrink: 0;
-  min-height: 32px;
-}
-
-.header-tabs {
-  display: flex;
-  align-items: center;
-}
-
-.tab {
-  padding: 6px 12px;
-  background: #007acc;
-  color: white;
-  border-radius: 4px 4px 0 0;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: default;
-}
-
-.tab.active {
-  background: #007acc;
-}
-
-.header-actions {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-}
-
-.clear-btn, .close-btn {
-  background: none;
-  border: none;
-  color: #cccccc;
-  cursor: pointer;
-  padding: 4px;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 3px;
-  transition: all 0.2s;
-  font-size: 14px;
-}
-
-.clear-btn:hover, .close-btn:hover {
-  background-color: #3c3c3c;
-  color: #ffffff;
-}
-
-.close-btn {
-  font-size: 16px;
-  font-weight: bold;
-}
-
-.clear-icon {
-  font-size: 12px;
-}
-
-.panel-content {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  background: #1e1e1e;
-}
-
-.empty-history {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  color: #6c757d;
-  text-align: center;
-}
-
-.empty-history p {
-  margin: 16px 0 0 0;
-  font-size: 14px;
-  color: #6c757d;
-}
-
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-.history-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0;
-}
-
-.history-list::-webkit-scrollbar {
-  width: 8px;
-}
-
-.history-list::-webkit-scrollbar-track {
-  background: #2d2d30;
-}
-
-.history-list::-webkit-scrollbar-thumb {
-  background: #5a5a5a;
-  border-radius: 4px;
-}
-
-.history-list::-webkit-scrollbar-thumb:hover {
-  background: #7a7a7a;
-}
-
-.history-item {
-  padding: 12px 16px;
-  border-bottom: 1px solid #3c3c3c;
-  transition: background-color 0.2s;
-}
-
-.history-item:hover {
-  background-color: #2d2d30;
-}
-
-.history-item:last-child {
-  border-bottom: none;
-}
-
-.history-user {
-  font-size: 11px;
-  color: #569cd6;
-  margin-bottom: 4px;
-  font-weight: 500;
-}
-
-.history-original {
-  font-size: 13px;
-  color: #d4d4d4;
-  margin-bottom: 4px;
-  line-height: 1.4;
-}
-
-.history-translation {
-  font-size: 13px;
-  color: #4ec9b0;
-  margin-bottom: 4px;
-  line-height: 1.4;
-  font-weight: 500;
-}
-
-.history-time {
-  font-size: 10px;
-  color: #6a9955;
-  text-align: right;
-}
-
-/* WebSocket连接错误提示样式 */
-.websocket-error-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.7);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.websocket-error-modal {
-  background: #fff;
-  border-radius: 10px;
-  padding: 20px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-  text-align: center;
-  max-width: 400px;
-  width: 90%;
-}
-
-.error-header h3 {
-  color: #333;
-  margin-bottom: 10px;
-  font-size: 20px;
-}
-
-.error-content p {
-  color: #555;
-  font-size: 14px;
-  margin-bottom: 10px;
-  line-height: 1.5;
-}
-
-.error-content ul {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 20px 0;
-  text-align: left;
-}
-
-.error-content ul li {
-  color: #666;
-  font-size: 13px;
-  margin-bottom: 5px;
-  line-height: 1.4;
-}
-
-.error-actions {
-  display: flex;
-  justify-content: space-around;
-  gap: 10px;
-}
-
-.btn-retry, .btn-dismiss {
-  padding: 8px 15px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: bold;
-  transition: background-color 0.3s ease;
-}
-
-.btn-retry {
-  background-color: #4CAF50;
-  color: white;
-}
-
-.btn-retry:hover {
-  background-color: #388E3C;
-}
-
-.btn-dismiss {
-  background-color: #f44336;
-  color: white;
-}
-
-.btn-dismiss:hover {
-  background-color: #D32F2F;
 }
 
 /* 字幕样式 */
 .subtitle-container {
   position: fixed;
-  bottom: 80px;
-  left: 0;
-  right: 0;
-  z-index: 1001;
-  padding: 0 20px;
-  pointer-events: none;
+  bottom: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  max-width: 80%;
+  text-align: center;
 }
 
 .subtitle-content {
-  max-width: 800px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.subtitle-item {
   background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 12px 20px;
   border-radius: 8px;
-  padding: 12px 16px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
+.subtitle-item {
+  margin-bottom: 8px;
+}
+
+.subtitle-item:last-child {
+  margin-bottom: 0;
+}
+
+.subtitle-user {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #ffffff;
+}
+
 .subtitle-original {
-  color: #fff;
   font-size: 16px;
   font-weight: 500;
   margin-bottom: 4px;
-  line-height: 1.4;
+  color: #ffffff;
 }
 
 .subtitle-translation {
-  color: #ffd700;
   font-size: 14px;
-  font-weight: 400;
-  line-height: 1.3;
-  opacity: 0.9;
+  color: #cccccc;
+  font-style: italic;
 }
 
 

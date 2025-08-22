@@ -2,6 +2,7 @@ export interface TranslationMessage {
   zhText: string;
   jaText: string;
   userId: string;
+  userName: string;
   timestamp: number;
 }
 

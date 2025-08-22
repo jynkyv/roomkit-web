@@ -311,6 +311,10 @@ const connectWebSocket = async (): Promise<void> => {
               
               // 处理流式识别结果
               if (result.context && result.tranContent) {
+                // 获取当前用户信息
+                const userInfo = getUserInfo();
+                const currentUserName = userInfo?.userName || '未知用户';
+                
                 // 处理流式字幕显示
                 if (result.partial) {
                   // 部分结果：更新当前正在识别的字幕
@@ -319,7 +323,7 @@ const connectWebSocket = async (): Promise<void> => {
                     subtitleStore.addSubtitle(
                       result.context || '',
                       result.tranContent,
-                      '我',
+                      currentUserName,
                       true // 标记为部分结果
                     );
                   } else {
@@ -347,7 +351,7 @@ const connectWebSocket = async (): Promise<void> => {
                     subtitleStore.addSubtitle(
                       result.context || '',
                       result.tranContent,
-                      '我',
+                      currentUserName,
                       false // 标记为完整结果
                     );
                   }

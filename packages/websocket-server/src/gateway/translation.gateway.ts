@@ -144,12 +144,13 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
         zhText,
         jaText,
         userId,
+        userName: user.name, // 使用用户服务中的用户名
         timestamp,
       };
       
       client.to(roomId).emit('translation_broadcast', translationMessage);
       
-      this.logger.log(`广播翻译消息: 用户 ${userId} 在房间 ${roomId}`);
+      this.logger.log(`广播翻译消息: 用户 ${user.name} (${userId}) 在房间 ${roomId}`);
     } catch (error) {
       this.logger.error('处理翻译消息失败:', error);
       client.emit('error', {
