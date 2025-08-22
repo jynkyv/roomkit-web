@@ -1,5 +1,5 @@
 <template>
-  <div v-if="visibleSubtitles.length > 0" class="subtitle-overlay">
+  <div v-if="visibleSubtitles.length > 0 && isTranslating" class="subtitle-overlay">
     <div class="subtitle-container">
       <div 
         v-for="(subtitle, index) in visibleSubtitles" 
@@ -26,6 +26,9 @@
 import { computed, watch, ref } from 'vue';
 import { useSubtitleStore } from '../stores/subtitle';
 
+// 翻译状态管理
+const isTranslating = ref(false);
+
 // 字幕状态管理
 const subtitleStore = useSubtitleStore();
 
@@ -43,13 +46,20 @@ const visibleSubtitles = ref<Array<{
 // 字幕ID计数器
 let subtitleIdCounter = 0;
 
+// 监听翻译状态变化
+const updateTranslationStatus = () => {
+  // 检查是否有活跃的翻译会话
+  const hasActiveSubtitles = subtitleStore.subtitleResults.length > 0;
+  const hasRecentActivity = subtitleStore.subtitleResults.some(
+    subtitle => Date.now() - subtitle.timestamp < 30000 // 30秒内有活动
+  );
+  isTranslating.value = hasActiveSubtitles && hasRecentActivity;
+};
+
 // 监听字幕数据变化
 watch(() => subtitleStore.subtitleResults, (newResults, oldResults) => {
-  console.log('字幕数据变化:', { 
-    newLength: newResults.length, 
-    oldLength: oldResults?.length || 0,
-    newResults: newResults 
-  });
+  // 更新翻译状态
+  updateTranslationStatus();
   
   // 处理新字幕添加
   if (newResults.length > (oldResults?.length || 0)) {
@@ -57,7 +67,7 @@ watch(() => subtitleStore.subtitleResults, (newResults, oldResults) => {
     const newSubtitle = newResults[newResults.length - 1];
     const subtitleId = ++subtitleIdCounter;
     
-    console.log('添加新字幕到显示:', newSubtitle);
+
     
     // 添加到可见字幕列表
     visibleSubtitles.value.push({
@@ -89,24 +99,17 @@ watch(() => subtitleStore.subtitleResults, (newResults, oldResults) => {
       }, 10000); // 10秒
     }
   } else if (newResults.length === oldResults?.length && newResults.length > 0) {
-    console.log('字幕内容更新（部分结果）');
     // 字幕内容更新（部分结果）
     const lastSubtitle = newResults[newResults.length - 1];
     const lastVisibleSubtitle = visibleSubtitles.value[visibleSubtitles.value.length - 1];
     
-    console.log('lastSubtitle:', lastSubtitle);
-    console.log('lastVisibleSubtitle:', lastVisibleSubtitle);
-    console.log('visibleSubtitles数量:', visibleSubtitles.value.length);
-    
     if (lastVisibleSubtitle && lastSubtitle.isPartial) {
-      console.log('更新可见字幕内容');
       // 更新最后一个可见字幕的内容
       lastVisibleSubtitle.originalText = lastSubtitle.originalText;
       lastVisibleSubtitle.translatedText = lastSubtitle.translatedText;
       lastVisibleSubtitle.timestamp = lastSubtitle.timestamp;
       lastVisibleSubtitle.isPartial = lastSubtitle.isPartial;
     } else if (!lastVisibleSubtitle && newResults.length > 0) {
-      console.log('添加第一个字幕到显示列表');
       // 如果没有可见字幕但有字幕数据，添加第一个字幕
       const subtitleId = ++subtitleIdCounter;
       visibleSubtitles.value.push({
@@ -117,11 +120,6 @@ watch(() => subtitleStore.subtitleResults, (newResults, oldResults) => {
         timestamp: lastSubtitle.timestamp,
         isFading: false,
         isPartial: lastSubtitle.isPartial,
-      });
-    } else {
-      console.log('无法更新字幕:', { 
-        hasLastVisibleSubtitle: !!lastVisibleSubtitle, 
-        isPartial: lastSubtitle?.isPartial 
       });
     }
   }
@@ -169,20 +167,6 @@ watch(() => subtitleStore.subtitleResults, (newResults, oldResults) => {
 .subtitle-item.partial {
   border-color: rgba(255, 193, 7, 0.6);
   background: rgba(0, 0, 0, 0.9);
-  position: relative;
-}
-
-.subtitle-item.partial::after {
-  content: "正在识别...";
-  position: absolute;
-  top: -8px;
-  right: 10px;
-  background: #ffc107;
-  color: #000;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 10px;
-  font-weight: bold;
 }
 
 .subtitle-header {

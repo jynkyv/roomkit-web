@@ -14,7 +14,6 @@ export const useSubtitleStore = defineStore('subtitle', () => {
 
   // 添加字幕
   const addSubtitle = (originalText: string, translatedText: string, userName: string, isPartial: boolean = false) => {
-    console.log('添加字幕:', { originalText, translatedText, userName, isPartial });
     subtitleResults.value.push({
       originalText,
       translatedText,
@@ -27,21 +26,16 @@ export const useSubtitleStore = defineStore('subtitle', () => {
     if (subtitleResults.value.length > 50) {
       subtitleResults.value.shift();
     }
-    console.log('字幕store当前数量:', subtitleResults.value.length);
   };
 
   // 更新最后一个字幕（用于部分结果）
   const updateLastSubtitle = (originalText: string, translatedText: string) => {
-    console.log('更新字幕:', { originalText, translatedText });
     if (subtitleResults.value.length > 0) {
       const lastSubtitle = subtitleResults.value[subtitleResults.value.length - 1];
       lastSubtitle.originalText = originalText;
       lastSubtitle.translatedText = translatedText;
       lastSubtitle.timestamp = Date.now();
       lastSubtitle.isPartial = true;
-      console.log('字幕已更新');
-    } else {
-      console.warn('没有字幕可以更新');
     }
   };
 

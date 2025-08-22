@@ -301,39 +301,18 @@ const connectWebSocket = async (): Promise<void> => {
         try {
           const data = JSON.parse(event.data);
           console.log('收到WebSocket消息:', data);
-          console.log('🚨 测试消息 - 如果看到这个，说明代码已更新 🚨');
-          console.log('data.action:', data.action, '类型:', typeof data.action);
-          console.log('data.action === "recognition":', data.action === 'recognition');
           
           if (data.action === 'started' && data.errorCode === '0') {
             connectionStatus.value = '开始流式识别...';
             console.log('开始流式识别成功');
           } else if (data.action === 'recognition') {
-            console.log('=== 收到recognition消息 ===');
-            console.log('完整数据:', data);
             if (data.result) {
               const result = data.result;
-              console.log('result对象:', result);
-              console.log('result.context:', result.context);
-              console.log('result.tranContent:', result.tranContent);
-              console.log('result.partial:', result.partial);
               
               // 处理流式识别结果
-              if (result.context) {
-                console.log('流式识别结果:', result.context, 'partial:', result.partial);
-              }
-              
-              // 处理流式翻译结果
-              console.log('检查tranContent:', result.tranContent, '类型:', typeof result.tranContent);
-              console.log('result的所有字段:', Object.keys(result));
-              console.log('result的完整内容:', JSON.stringify(result, null, 2));
-              
-              if (result.tranContent) {
-                console.log('流式翻译结果:', result.tranContent, 'partial:', result.partial);
-                
+              if (result.context && result.tranContent) {
                 // 处理流式字幕显示
                 if (result.partial) {
-                  console.log('处理部分字幕结果:', result.context, result.tranContent);
                   // 部分结果：更新当前正在识别的字幕
                   if (subtitleStore.subtitleResults.length === 0) {
                     // 如果是第一个部分结果，创建新的字幕条目
@@ -343,17 +322,14 @@ const connectWebSocket = async (): Promise<void> => {
                       '我',
                       true // 标记为部分结果
                     );
-                    console.log('创建新的部分字幕，当前字幕数量:', subtitleStore.subtitleResults.length);
                   } else {
                     // 更新最后一个字幕条目
                     subtitleStore.updateLastSubtitle(
                       result.context || '',
                       result.tranContent
                     );
-                    console.log('更新部分字幕，当前字幕数量:', subtitleStore.subtitleResults.length);
                   }
                 } else {
-                  console.log('处理完整字幕结果:', result.context, result.tranContent);
                   // 完整结果：完成当前字幕并发送广播
                   if (subtitleStore.subtitleResults.length > 0) {
                     // 完成最后一个部分字幕
@@ -375,7 +351,6 @@ const connectWebSocket = async (): Promise<void> => {
                       false // 标记为完整结果
                     );
                   }
-                  console.log('完成字幕处理，当前字幕数量:', subtitleStore.subtitleResults.length);
                 }
               }
               
@@ -439,6 +414,9 @@ const stopYoudaoTranslation = () => {
 
   isRecording.value = false;
   connectionStatus.value = t('Connection closed');
+  
+  // 清空字幕显示
+  subtitleStore.clearSubtitles();
 };
 
 // 获取麦克风音频流
