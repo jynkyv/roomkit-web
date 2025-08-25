@@ -86,7 +86,7 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
       
       // 记录客户端到用户的映射
       this.clientToUser.set(client.id, { userId, roomId });
-      this.heartbeatService.addClient(client.id, client);
+      this.heartbeatService.addClient(client.id, client, userId);
       
       // 加入Socket.IO房间
       client.join(roomId);
@@ -122,11 +122,12 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
   @SubscribeMessage('translation_message')
   handleTranslationMessage(client: Socket, data: any) {
     try {
-      const { original, translation, userId, timestamp } = data;
+      const { original, translation, userId, oriLang, targetLang, timestamp } = data;
       const userInfo = this.clientToUser.get(client.id);
       
       this.logger.log(`收到翻译消息: 客户端 ${client.id}, 用户 ${userId}`);
       this.logger.log(`用户信息:`, userInfo);
+      this.logger.log(`语言信息: 源语言=${oriLang}, 目标语言=${targetLang}`);
       
       if (!userInfo) {
         throw new Error('用户未登录');
@@ -150,10 +151,15 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
       const roomUsers = this.roomService.getRoomUsers(roomId);
       this.logger.log(`房间 ${roomId} 用户列表:`, roomUsers);
       
-      // 直接转发有道翻译的原始数据结构，只添加用户名
+      // 构建广播数据，包含语言信息
       const broadcastData = {
-        ...data, // 保持有道翻译的原始数据结构
-        userName: user.name, // 只添加用户名
+        original,
+        translation,
+        userId,
+        userName: user.name,
+        oriLang,
+        targetLang,
+        timestamp,
       };
       
       this.logger.log(`准备广播消息:`, broadcastData);
@@ -162,7 +168,7 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
       // 广播给房间内其他用户（排除发送者）
       this.server.to(roomId).except(client.id).emit('translation_broadcast', broadcastData);
       
-      this.logger.log(`广播翻译消息: 用户 ${user.name} (${userId}) 在房间 ${roomId}`);
+      this.logger.log(`广播翻译消息: 用户 ${user.name} (${userId}) 在房间 ${roomId}, 语言: ${oriLang}→${targetLang}`);
     } catch (error) {
       this.logger.error('处理翻译消息失败:', error);
       client.emit('error', {

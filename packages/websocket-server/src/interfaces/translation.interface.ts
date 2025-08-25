@@ -1,8 +1,10 @@
 export interface TranslationMessage {
-  zhText: string;
-  jaText: string;
+  original: string;
+  translation: string;
   userId: string;
   userName: string;
+  oriLang: string;
+  targetLang: string;
   timestamp: number;
 }
 

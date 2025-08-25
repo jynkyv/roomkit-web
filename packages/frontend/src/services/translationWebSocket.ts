@@ -1,5 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { getWebSocketUrl } from '../config/websocket';
+import { LanguageConfigService } from './languageConfig';
 
 // 简化的翻译用户接口
 export interface TranslationUser {
@@ -12,9 +13,12 @@ export interface TranslationUser {
 
 // 简化的翻译消息接口
 export interface TranslationMessage {
-  zhText: string;
-  jaText: string;
+  original: string;
+  translation: string;
   userId: string;
+  userName: string;
+  oriLang: string;
+  targetLang: string;
   timestamp: number;
 }
 
@@ -26,16 +30,18 @@ export interface SystemMessage {
 }
 
 class TranslationWebSocketService {
+  private readonly serverUrl: string;
   private socket: Socket | null = null;
+  private isConnected = false;
   private currentUserId: string = '';
+  private currentUserName: string = '';
   private currentRoomId: string = '';
+  private heartbeatInterval: NodeJS.Timeout | null = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 10;
+  private reconnectInterval = 1000; // 初始重连间隔1秒
+  private maxReconnectInterval = 30000; // 最大重连间隔30秒
   private users: Map<string, TranslationUser> = new Map();
-  private isConnected: boolean = false;
-  private reconnectAttempts: number = 0;
-  private maxReconnectAttempts: number = 5;
-  private reconnectInterval: number = 3000;
-  private heartbeatInterval: number = 30000;
-  private heartbeatTimer: NodeJS.Timeout | null = null;
   private eventListeners: Map<string, Function[]> = new Map();
 
   // 初始化WebSocket连接
@@ -65,6 +71,7 @@ class TranslationWebSocketService {
         this.socket.on('connect', () => {
           console.log('翻译WebSocket连接成功');
           this.isConnected = true;
+          this.resetReconnectState(); // 重置重连状态
           this.emit('connected', { clientId: this.socket?.id });
           
           // 连接成功后立即发送用户上线消息
@@ -84,9 +91,7 @@ class TranslationWebSocketService {
           if (reason === 'io server disconnect') {
             // 服务器主动断开，尝试重连
             console.log('服务器主动断开，尝试重连...');
-            setTimeout(() => {
-              this.socket?.connect();
-            }, 1000);
+            this.attemptReconnect();
           }
         });
 
@@ -169,11 +174,22 @@ class TranslationWebSocketService {
 
   // 发送翻译消息
   sendTranslationMessage(zhText: string, jaText: string): void {
-    console.log('发送翻译消息:', { zhText, jaText, userId: this.currentUserId, roomId: this.currentRoomId });
+    const languageConfig = LanguageConfigService.getConfig();
+    console.log('发送翻译消息:', { 
+      zhText, 
+      jaText, 
+      userId: this.currentUserId, 
+      roomId: this.currentRoomId,
+      oriLang: languageConfig.sourceLanguage,
+      targetLang: languageConfig.targetLanguage
+    });
+    
     this.sendMessage('translation_message', {
       original: zhText,        // 有道翻译的原始字段名
       translation: jaText,     // 有道翻译的原始字段名
       userId: this.currentUserId,
+      oriLang: languageConfig.sourceLanguage,  // 源语言
+      targetLang: languageConfig.targetLanguage, // 目标语言
       timestamp: Date.now(),
     });
   }
@@ -201,17 +217,44 @@ class TranslationWebSocketService {
   // 启动心跳
   private startHeartbeat(): void {
     this.stopHeartbeat();
-    this.heartbeatTimer = setInterval(() => {
+    this.heartbeatInterval = setInterval(() => {
       this.sendHeartbeat();
-    }, this.heartbeatInterval);
+    }, 30000); // 30秒心跳间隔
   }
 
   // 停止心跳
   private stopHeartbeat(): void {
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
     }
+  }
+
+  // 智能重连方法
+  private attemptReconnect(): void {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.error('达到最大重连次数，停止重连');
+      this.emit('error', { message: '重连失败，已达到最大重试次数' });
+      return;
+    }
+
+    this.reconnectAttempts++;
+    const delay = Math.min(this.reconnectInterval * Math.pow(1.5, this.reconnectAttempts - 1), this.maxReconnectInterval);
+    
+    console.log(`第 ${this.reconnectAttempts} 次重连尝试，延迟 ${delay}ms`);
+    
+    setTimeout(() => {
+      if (this.socket) {
+        console.log('执行重连...');
+        this.socket.connect();
+      }
+    }, delay);
+  }
+
+  // 重置重连状态
+  private resetReconnectState(): void {
+    this.reconnectAttempts = 0;
+    this.reconnectInterval = 1000; // 重置为初始间隔
   }
 
   // 更新用户列表

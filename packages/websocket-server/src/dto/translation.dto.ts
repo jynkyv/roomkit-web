@@ -3,15 +3,23 @@ import { IsString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
 export class TranslationMessageDto {
   @IsString()
   @IsNotEmpty()
-  zhText: string;
+  original: string;
 
   @IsString()
   @IsNotEmpty()
-  jaText: string;
+  translation: string;
 
   @IsString()
   @IsNotEmpty()
   userId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  oriLang: string;
+
+  @IsString()
+  @IsNotEmpty()
+  targetLang: string;
 
   @IsNumber()
   timestamp: number;

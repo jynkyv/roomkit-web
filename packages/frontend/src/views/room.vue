@@ -45,6 +45,7 @@ import { getLanguage, getTheme, clearBrowserCache, checkAndFixWebSocketConnectio
 import { useUIKit } from '@tencentcloud/uikit-base-component-vue3';
 import { translationWebSocketService } from '../services/translationWebSocket';
 import { useSubtitleStore } from '../stores/subtitle';
+import { LanguageConfigService } from '../services/languageConfig';
 
 const { t } = useI18n();
 const { theme } = useUIKit();
@@ -147,9 +148,38 @@ const handleTranslationBroadcast = (data: any) => {
   const currentUserInfo = getUserInfo();
   const isOwnMessage = currentUserInfo && data.userId === currentUserInfo.userId;
   
+  // 获取语言配置
+  const languageConfig = LanguageConfigService.getConfig();
+  
+  // 根据语言配置决定显示内容
+  let displayOriginal: string;
+  let displayTranslation: string;
+  
+  if (data.oriLang === languageConfig.sourceLanguage) {
+    // 如果广播的源语言是本客户端的源语言，显示original作为主字幕
+    displayOriginal = data.original;
+    displayTranslation = data.translation;
+  } else if (data.targetLang === languageConfig.sourceLanguage) {
+    // 如果广播的目标语言是本客户端的源语言，显示translation作为主字幕
+    displayOriginal = data.translation;
+    displayTranslation = data.original;
+  } else {
+    // 默认显示（兼容性处理）
+    displayOriginal = data.original;
+    displayTranslation = data.translation;
+  }
+  
+  console.log('语言配置智能显示:', {
+    clientSourceLang: languageConfig.sourceLanguage,
+    broadcastOriLang: data.oriLang,
+    broadcastTargetLang: data.targetLang,
+    displayOriginal,
+    displayTranslation
+  });
+  
   // 显示字幕，使用实际的用户名
   const displayUserName = data.userName || '未知用户';
-  showSubtitle(data.original, data.translation, displayUserName);
+  showSubtitle(displayOriginal, displayTranslation, displayUserName);
 };
 
 // 处理用户加入

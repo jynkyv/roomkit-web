@@ -71,9 +71,9 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from '../locales';
+import { useSubtitleStore } from '../stores/subtitle';
 import { translationWebSocketService } from '../services/translationWebSocket';
 import { LanguageConfigService, type LanguageConfig } from '../services/languageConfig';
-import { useSubtitleStore } from '../stores/subtitle';
 
 // 环境变量
 const appKey = import.meta.env.VITE_YOUDAO_APP_KEY;
@@ -569,10 +569,39 @@ const handleWebSocketError = (data: any) => {
 const handleTranslationBroadcast = (data: any) => {
   console.log('收到翻译广播:', data);
   
-  // 添加到全局字幕状态 - 使用有道翻译的原始数据结构
+  // 获取语言配置
+  const currentLanguageConfig = LanguageConfigService.getConfig();
+  
+  // 根据语言配置决定显示内容
+  let displayOriginal: string;
+  let displayTranslation: string;
+  
+  if (data.oriLang === currentLanguageConfig.sourceLanguage) {
+    // 如果广播的源语言是本客户端的源语言，显示original作为主字幕
+    displayOriginal = data.original;
+    displayTranslation = data.translation;
+  } else if (data.targetLang === currentLanguageConfig.sourceLanguage) {
+    // 如果广播的目标语言是本客户端的源语言，显示translation作为主字幕
+    displayOriginal = data.translation;
+    displayTranslation = data.original;
+  } else {
+    // 默认显示（兼容性处理）
+    displayOriginal = data.original;
+    displayTranslation = data.translation;
+  }
+  
+  console.log('RealtimeTranslator语言配置智能显示:', {
+    clientSourceLang: currentLanguageConfig.sourceLanguage,
+    broadcastOriLang: data.oriLang,
+    broadcastTargetLang: data.targetLang,
+    displayOriginal,
+    displayTranslation
+  });
+  
+  // 添加到全局字幕状态 - 使用智能处理后的数据
   subtitleStore.addSubtitle(
-    data.original,      // 原文（中文）
-    data.translation,   // 翻译（日文）
+    displayOriginal,      // 智能选择的主字幕
+    displayTranslation,   // 智能选择的副字幕
     data.userName || `用户${data.userId}` // 用户名
   );
 };
