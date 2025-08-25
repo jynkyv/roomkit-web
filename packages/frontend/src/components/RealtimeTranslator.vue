@@ -68,7 +68,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { useI18n } from '../locales';
 import { translationWebSocketService } from '../services/translationWebSocket';
 import { LanguageConfigService, type LanguageConfig } from '../services/languageConfig';
@@ -89,6 +90,9 @@ const props = defineProps<Props>();
 const emit = defineEmits<{
   'update:showTranslator': [value: boolean];
 }>();
+
+// 获取路由信息
+const route = useRoute();
 
 // 国际化
 const { t } = useI18n();
@@ -334,17 +338,11 @@ const connectWebSocket = async (): Promise<void> => {
                     );
                   }
                 } else {
-                  // 完整结果：完成当前字幕并发送广播
+                  // 完整结果：完成当前字幕
                   if (subtitleStore.subtitleResults.length > 0) {
                     // 完成最后一个部分字幕
                     subtitleStore.completeLastSubtitle();
                   }
-                  
-                  // 发送到WebSocket广播给其他用户
-                  translationWebSocketService.sendTranslationMessage(
-                    result.context || '',
-                    result.tranContent
-                  );
                   
                   // 如果还没有字幕条目，创建一个完整的字幕
                   if (subtitleStore.subtitleResults.length === 0) {
@@ -356,6 +354,12 @@ const connectWebSocket = async (): Promise<void> => {
                     );
                   }
                 }
+                
+                // 每一个有道WebSocket消息都立即发送并广播
+                translationWebSocketService.sendTranslationMessage(
+                  result.context || '',      // 原文
+                  result.tranContent || ''   // 翻译
+                );
               }
               
               // 处理流式模式特有的字段
@@ -565,11 +569,11 @@ const handleWebSocketError = (data: any) => {
 const handleTranslationBroadcast = (data: any) => {
   console.log('收到翻译广播:', data);
   
-  // 添加到全局字幕状态 - 传递双语数据
+  // 添加到全局字幕状态 - 使用有道翻译的原始数据结构
   subtitleStore.addSubtitle(
-    data.zhText,        // 原文（中文）
-    data.jaText,        // 翻译（日文）
-    `用户${data.userId}` // 用户名
+    data.original,      // 原文（中文）
+    data.translation,   // 翻译（日文）
+    data.userName || `用户${data.userId}` // 用户名
   );
 };
 
@@ -601,13 +605,11 @@ const getUserInfo = () => {
 // 获取房间信息
 const getRoomInfo = () => {
   try {
-    const roomInfoStr = sessionStorage.getItem('tuiRoom-roomInfo');
-    console.log('sessionStorage中的房间信息:', roomInfoStr);
-    if (roomInfoStr) {
-      const roomInfo = JSON.parse(roomInfoStr);
-      console.log('解析后的房间信息:', roomInfo);
+    const roomId = String(route.query.roomId);
+    console.log('从路由查询参数获取房间ID:', roomId);
+    if (roomId && roomId !== 'undefined') {
       return {
-        roomId: roomInfo.roomId
+        roomId: roomId
       };
     }
   } catch (error) {
@@ -624,10 +626,16 @@ const initWebSocket = async () => {
     const userInfo = getUserInfo();
     const roomInfo = getRoomInfo();
     
-    // 如果没有用户信息，使用默认值
-    const userId = userInfo?.userId || 'default-user-' + Date.now();
-    const userName = userInfo?.userName || '默认用户';
-    const roomId = roomInfo?.roomId || '000000'; // 默认房间ID
+    if (!userInfo || !roomInfo) {
+      console.error('无法获取用户或房间信息，无法建立WebSocket连接');
+      connectionStatus.value = t('Connection Failed - Missing Info');
+      error.value = t('Failed to get user or room information');
+      return;
+    }
+    
+    const userId = userInfo.userId;
+    const userName = userInfo.userName;
+    const roomId = roomInfo.roomId;
     
     console.log('使用连接信息:', { userId, userName, roomId });
     

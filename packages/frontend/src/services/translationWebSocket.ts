@@ -157,9 +157,10 @@ class TranslationWebSocketService {
 
   // 发送翻译消息
   sendTranslationMessage(zhText: string, jaText: string): void {
+    console.log('发送翻译消息:', { zhText, jaText, userId: this.currentUserId, roomId: this.currentRoomId });
     this.sendMessage('translation_message', {
-      zhText,
-      jaText,
+      original: zhText,        // 有道翻译的原始字段名
+      translation: jaText,     // 有道翻译的原始字段名
       userId: this.currentUserId,
       timestamp: Date.now(),
     });

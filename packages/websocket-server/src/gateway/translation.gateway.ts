@@ -64,8 +64,7 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
   }
 
   @SubscribeMessage('user_online')
-  @UsePipes(ValidationPipe)
-  handleUserOnline(client: Socket, data: UserJoinDto) {
+  handleUserOnline(client: Socket, data: any) {
     try {
       const { userId, userName, roomId } = data;
       
@@ -118,20 +117,25 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
   }
 
   @SubscribeMessage('translation_message')
-  @UsePipes(ValidationPipe)
-  handleTranslationMessage(client: Socket, data: TranslationMessageDto) {
+  handleTranslationMessage(client: Socket, data: any) {
     try {
-      const { zhText, jaText, userId, timestamp } = data;
+      const { original, translation, userId, timestamp } = data;
       const userInfo = this.clientToUser.get(client.id);
+      
+      this.logger.log(`收到翻译消息: 客户端 ${client.id}, 用户 ${userId}`);
+      this.logger.log(`用户信息:`, userInfo);
       
       if (!userInfo) {
         throw new Error('用户未登录');
       }
       
       const { roomId } = userInfo;
+      this.logger.log(`房间ID: ${roomId}`);
       
       // 验证用户身份
       const user = this.userService.getUser(userId);
+      this.logger.log(`用户验证结果:`, user);
+      
       if (!user || user.roomId !== roomId) {
         throw new Error('用户信息不匹配');
       }
@@ -139,16 +143,21 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
       // 更新房间活动时间
       this.roomService.updateRoomActivity(roomId);
       
-      // 广播翻译消息给房间内其他用户（排除发送者）
-      const translationMessage: TranslationMessage = {
-        zhText,
-        jaText,
-        userId,
-        userName: user.name, // 使用用户服务中的用户名
-        timestamp,
+      // 获取房间内的用户列表
+      const roomUsers = this.roomService.getRoomUsers(roomId);
+      this.logger.log(`房间 ${roomId} 用户列表:`, roomUsers);
+      
+      // 直接转发有道翻译的原始数据结构，只添加用户名
+      const broadcastData = {
+        ...data, // 保持有道翻译的原始数据结构
+        userName: user.name, // 只添加用户名
       };
       
-      client.to(roomId).emit('translation_broadcast', translationMessage);
+      this.logger.log(`准备广播消息:`, broadcastData);
+      this.logger.log(`广播目标房间: ${roomId}, 发送者客户端: ${client.id}`);
+      
+      // 广播给房间内其他用户（排除发送者）
+      client.to(roomId).emit('translation_broadcast', broadcastData);
       
       this.logger.log(`广播翻译消息: 用户 ${user.name} (${userId}) 在房间 ${roomId}`);
     } catch (error) {
@@ -198,7 +207,7 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
         this.userService.removeUser(userId);
         this.roomService.removeUserFromRoom(roomId, userId);
         
-        // 离开Socket.IO房间
+        // 离开Socket.IO房间 
         client.leave(roomId);
         
         // 广播用户离开消息

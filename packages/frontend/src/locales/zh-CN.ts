@@ -130,4 +130,11 @@ export default {
   'Attempting to reconnect': '正在尝试重连',
   'Reconnection successful': '重连成功',
   'Reconnection failed': '重连失败',
+  
+  // 新增的翻译键
+  'Connection Failed - Missing Info': '连接失败 - 缺少信息',
+  'Failed to get user or room information': '无法获取用户或房间信息',
+  'Translation Settings': '翻译设置',
+  'Save': '保存',
+  'Reset': '重置',
 };

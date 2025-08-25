@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { UIKitProvider } from '@tencentcloud/uikit-base-component-vue3';
-import SubtitleOverlay from './components/SubtitleOverlay.vue';
 
 // 监听历史记录切换事件
 const handleToggleHistory = (event: CustomEvent) => {
@@ -21,8 +20,7 @@ onUnmounted(() => {
   <UIKitProvider :theme="{ themeStyle: 'light', primaryColor: 'theme' }">
     <div id="app">
       <router-view />
-      <!-- 全局字幕组件 - 完全独立，不依赖任何props -->
-      <SubtitleOverlay />
+      <!-- 移除SubtitleOverlay组件 -->
     </div>
   </UIKitProvider>
 </template>

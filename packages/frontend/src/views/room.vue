@@ -21,7 +21,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, computed } from 'vue';
+import { onMounted, onUnmounted, ref, computed, watch } from 'vue';
 import { ConferenceMainView, conference, RoomEvent, LanguageOption, ThemeOption } from '../components/TUIRoom/index.ts';
 import { onBeforeRouteLeave, useRoute } from 'vue-router';
 import router from '../router/index';
@@ -29,11 +29,13 @@ import i18n, { useI18n } from '../locales/index';
 import { getLanguage, getTheme, clearBrowserCache, checkAndFixWebSocketConnection } from  '../utils/utils';
 import { useUIKit } from '@tencentcloud/uikit-base-component-vue3';
 import { translationWebSocketService } from '../services/translationWebSocket';
+import { useSubtitleStore } from '../stores/subtitle';
 
 const { t } = useI18n();
 const { theme } = useUIKit();
 
-
+// 字幕store
+const subtitleStore = useSubtitleStore();
 
 // 字幕相关状态
 const currentSubtitle = ref<{ original: string; translation: string; id: number; timestamp: number; userName?: string } | null>(null);
@@ -64,6 +66,18 @@ const showSubtitle = (original: string, translation: string, userName?: string) 
   }, 5000);
 };
 
+// 监听字幕store变化，显示最新的字幕
+watch(() => subtitleStore.subtitleResults, (newResults) => {
+  if (newResults.length > 0) {
+    const latestSubtitle = newResults[newResults.length - 1];
+    showSubtitle(
+      latestSubtitle.originalText,
+      latestSubtitle.translatedText,
+      latestSubtitle.userName
+    );
+  }
+}, { deep: true });
+
 
 // 监听WebSocket翻译结果
 const handleTranslationResult = (data: any) => {
@@ -80,9 +94,9 @@ const handleTranslationBroadcast = (data: any) => {
   const currentUserInfo = getUserInfo();
   const isOwnMessage = currentUserInfo && data.userId === currentUserInfo.userId;
   
-  // 显示字幕，使用实际的用户名而不是"我"
+  // 显示字幕，使用实际的用户名
   const displayUserName = data.userName || '未知用户';
-  showSubtitle(data.zhText, data.jaText, displayUserName);
+  showSubtitle(data.original, data.translation, displayUserName);
 };
 
 // 处理用户加入
@@ -150,8 +164,10 @@ const getUserInfo = () => {
 const getRoomInfo = () => {
   try {
     const roomInfoStr = sessionStorage.getItem('tuiRoom-roomInfo');
+    console.log('sessionStorage中的房间信息:', roomInfoStr);
     if (roomInfoStr) {
       const roomInfo = JSON.parse(roomInfoStr);
+      console.log('解析后的房间信息:', roomInfo);
       return {
         roomId: roomInfo.roomId
       };
@@ -159,7 +175,7 @@ const getRoomInfo = () => {
   } catch (error) {
     console.error('获取房间信息失败:', error);
   }
-  
+  console.warn('未找到房间信息');
   return null;
 };
 

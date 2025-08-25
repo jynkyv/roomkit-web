@@ -164,8 +164,15 @@ export const checkAndFixWebSocketConnection = () => {
     const userInfoObj = JSON.parse(userInfo);
     const roomInfoObj = JSON.parse(roomInfo);
     
-    if (!userInfoObj.userId || !userInfoObj.userName || !roomInfoObj.roomId) {
-      console.warn('检测到用户信息或房间信息不完整，建议清理缓存后重试');
+    // 检查用户信息是否完整
+    if (!userInfoObj.userId || !userInfoObj.userName) {
+      console.warn('检测到用户信息不完整，建议清理缓存后重试');
+      return false;
+    }
+    
+    // 检查房间信息是否完整（创建房间时可能还没有roomId）
+    if (!roomInfoObj.action) {
+      console.warn('检测到房间信息不完整，建议清理缓存后重试');
       return false;
     }
     
