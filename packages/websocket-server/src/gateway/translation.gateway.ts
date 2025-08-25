@@ -92,7 +92,7 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
       client.join(roomId);
       
       // 广播用户加入消息给房间内其他用户
-      client.to(roomId).emit('user_join', {
+      this.server.to(roomId).except(client.id).emit('user_join', {
         userId,
         userName,
         roomId,
@@ -105,6 +105,9 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
         users: roomUsers,
         timestamp: Date.now(),
       });
+      
+      // 发送房间当前状态给新用户（如果有正在进行的翻译）
+      this.sendRoomStatusToUser(client, roomId);
       
       this.logger.log(`用户 ${userName} (${userId}) 加入房间 ${roomId}`);
     } catch (error) {
@@ -157,7 +160,7 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
       this.logger.log(`广播目标房间: ${roomId}, 发送者客户端: ${client.id}`);
       
       // 广播给房间内其他用户（排除发送者）
-      client.to(roomId).emit('translation_broadcast', broadcastData);
+      this.server.to(roomId).except(client.id).emit('translation_broadcast', broadcastData);
       
       this.logger.log(`广播翻译消息: 用户 ${user.name} (${userId}) 在房间 ${roomId}`);
     } catch (error) {
@@ -211,7 +214,7 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
         client.leave(roomId);
         
         // 广播用户离开消息
-        client.to(roomId).emit('user_leave', {
+        this.server.to(roomId).except(client.id).emit('user_leave', {
           userId,
           userName: user.name,
           roomId,
@@ -222,6 +225,23 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
       }
     } catch (error) {
       this.logger.error('处理用户离开失败:', error);
+    }
+  }
+
+  // 发送房间当前状态给新用户
+  private sendRoomStatusToUser(client: Socket, roomId: string) {
+    try {
+      // 这里可以发送房间的当前状态，比如正在进行的翻译等
+      // 目前先发送一个房间状态确认消息
+      client.emit('room_status', {
+        roomId,
+        timestamp: Date.now(),
+        message: '房间状态同步完成'
+      });
+      
+      this.logger.log(`已发送房间状态给房间 ${roomId} 的新用户`);
+    } catch (error) {
+      this.logger.error('发送房间状态失败:', error);
     }
   }
 }

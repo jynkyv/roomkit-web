@@ -6,7 +6,22 @@
       <conference-main-view display-mode="permanent"></conference-main-view>
     </div>
 
-    <!-- 字幕显示 -->
+    <!-- 多用户字幕显示 -->
+    <div class="subtitle-container" v-if="displaySubtitles.length > 0">
+      <div class="subtitle-content">
+        <div 
+          v-for="[userId, subtitle] in displaySubtitles" 
+          :key="subtitle.id"
+          class="subtitle-item"
+        >
+          <div class="subtitle-user" v-if="subtitle.userName">{{ subtitle.userName }}</div>
+          <div class="subtitle-original">{{ subtitle.original }}</div>
+          <div class="subtitle-translation">{{ subtitle.translation }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 单用户字幕显示（兼容性，保留但不再使用） -->
     <div class="subtitle-container" v-if="currentSubtitle">
       <div class="subtitle-content">
         <div class="subtitle-item" :key="currentSubtitle.id">
@@ -37,7 +52,26 @@ const { theme } = useUIKit();
 // 字幕store
 const subtitleStore = useSubtitleStore();
 
-// 字幕相关状态
+// 多用户字幕状态管理
+const activeSubtitles = ref<Map<string, {
+  original: string;
+  translation: string;
+  id: number;
+  timestamp: number;
+  userName: string;
+  timeoutId: number;
+}>>(new Map());
+
+// 计算属性：只显示最新的3个字幕
+const displaySubtitles = computed(() => {
+  const subtitles = Array.from(activeSubtitles.value.entries());
+  // 按时间戳排序，最新的在前
+  subtitles.sort((a, b) => b[1].timestamp - a[1].timestamp);
+  // 只返回最新的3个
+  return subtitles.slice(0, 3);
+});
+
+// 字幕相关状态（保留用于兼容性）
 const currentSubtitle = ref<{ original: string; translation: string; id: number; timestamp: number; userName?: string } | null>(null);
 const subtitleTimeout = ref<number | null>(null);
 
@@ -46,8 +80,35 @@ const subtitleTimeout = ref<number | null>(null);
 // const showWebSocketError = ref(false); // Removed
 
 
-// 新字幕到来时显示并自动淡出
+// 多用户字幕显示函数
 const showSubtitle = (original: string, translation: string, userName?: string) => {
+  const displayUserName = userName || '未知用户';
+  const userId = displayUserName; // 使用用户名作为唯一标识
+  
+  // 清除该用户的旧定时器
+  const existingSubtitle = activeSubtitles.value.get(userId);
+  if (existingSubtitle) {
+    clearTimeout(existingSubtitle.timeoutId);
+  }
+  
+  // 创建新的字幕条目
+  const subtitleId = Date.now();
+  const timeoutId = window.setTimeout(() => {
+    activeSubtitles.value.delete(userId);
+  }, 5000); // 5秒后自动隐藏
+  
+  activeSubtitles.value.set(userId, {
+    original,
+    translation,
+    id: subtitleId,
+    timestamp: Date.now(),
+    userName: displayUserName,
+    timeoutId
+  });
+};
+
+// 兼容性函数（保留原有逻辑）
+const showSingleSubtitle = (original: string, translation: string, userName?: string) => {
   if (subtitleTimeout.value) {
     clearTimeout(subtitleTimeout.value);
     subtitleTimeout.value = null;
@@ -77,14 +138,6 @@ watch(() => subtitleStore.subtitleResults, (newResults) => {
     );
   }
 }, { deep: true });
-
-
-// 监听WebSocket翻译结果
-const handleTranslationResult = (data: any) => {
-  if (data.fromUserId !== translationWebSocketService.getCurrentUserId()) {
-    showSubtitle(data.data.original, data.data.translation);
-  }
-};
 
 // 处理翻译广播
 const handleTranslationBroadcast = (data: any) => {
@@ -335,7 +388,17 @@ onMounted(async () => {
 
 // 组件卸载时清理
 onUnmounted(() => {
-  translationWebSocketService.off('translation_result', handleTranslationResult);
+  // 清理所有字幕定时器
+  activeSubtitles.value.forEach((subtitle) => {
+    clearTimeout(subtitle.timeoutId);
+  });
+  activeSubtitles.value.clear();
+  
+  // 清理单用户字幕定时器
+  if (subtitleTimeout.value) {
+    clearTimeout(subtitleTimeout.value);
+  }
+  
   translationWebSocketService.off('translation_broadcast', handleTranslationBroadcast);
   translationWebSocketService.off('user_join', handleUserJoin);
   translationWebSocketService.off('user_leave', handleUserLeave);
@@ -398,7 +461,6 @@ onUnmounted(() => {
   conference.off(RoomEvent.THEME_CHANGED, changeTheme);
   
   // 移除翻译结果监听
-  translationWebSocketService.off('translation_result', handleTranslationResult);
   translationWebSocketService.off('translation_broadcast', handleTranslationBroadcast);
   translationWebSocketService.off('user_join', handleUserJoin);
   translationWebSocketService.off('user_leave', handleUserLeave);
@@ -448,43 +510,42 @@ const goToPage = (routePath: string) => {
 }
 
 .subtitle-content {
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 12px 20px;
-  border-radius: 8px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .subtitle-item {
-  margin-bottom: 8px;
-}
-
-.subtitle-item:last-child {
-  margin-bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  color: white;
+  padding: 10px 16px;
+  border-radius: 6px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .subtitle-user {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  margin-bottom: 4px;
-  color: #ffffff;
+  margin-bottom: 3px;
+  color: #ffd700;
 }
 
 .subtitle-original {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 500;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
   color: #ffffff;
+  line-height: 1.3;
 }
 
 .subtitle-translation {
-  font-size: 14px;
+  font-size: 13px;
   color: #cccccc;
   font-style: italic;
+  line-height: 1.2;
 }
-
-
 
 @media (max-width: 768px) {
   .subtitle-container {
@@ -497,7 +558,7 @@ const goToPage = (routePath: string) => {
   }
   
   .subtitle-item {
-    padding: 10px 12px;
+    padding: 10px 15px;
   }
   
   .subtitle-original {

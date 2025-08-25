@@ -40,29 +40,34 @@ class TranslationWebSocketService {
 
   // 初始化WebSocket连接
   async connect(userId: string, userName: string, roomId: string): Promise<void> {
-    this.currentUserId = userId;
-    this.currentRoomId = roomId;
-    
     return new Promise((resolve, reject) => {
       try {
-        const wsUrl = getWebSocketUrl();
-        
-        // 使用Socket.IO客户端
-        this.socket = io(wsUrl, {
+        console.log('开始连接翻译WebSocket服务...');
+        console.log('WebSocket URL:', getWebSocketUrl());
+        console.log('Socket.IO配置:', {
           path: '/translation',
-          transports: ['websocket'],
-          timeout: 20000,
-          reconnection: true,
-          reconnectionAttempts: this.maxReconnectAttempts,
-          reconnectionDelay: this.reconnectInterval,
+          transports: ['websocket', 'polling'],
+          timeout: 10000,
+          forceNew: true,
+        });
+        
+        this.currentUserId = userId;
+        this.currentRoomId = roomId;
+        
+        // 创建Socket.IO连接
+        this.socket = io(getWebSocketUrl(), {
+          path: '/translation',
+          transports: ['websocket', 'polling'],
+          timeout: 10000,
+          forceNew: true,
         });
 
         this.socket.on('connect', () => {
           console.log('翻译WebSocket连接成功');
           this.isConnected = true;
-          this.reconnectAttempts = 0;
+          this.emit('connected', { clientId: this.socket?.id });
           
-          // 发送用户上线消息
+          // 连接成功后立即发送用户上线消息
           this.sendUserOnline(userId, userName, roomId);
           
           // 启动心跳
@@ -74,12 +79,14 @@ class TranslationWebSocketService {
         this.socket.on('disconnect', (reason) => {
           console.log('翻译WebSocket连接断开:', reason);
           this.isConnected = false;
-          this.stopHeartbeat();
           this.emit('disconnected', { reason });
           
           if (reason === 'io server disconnect') {
             // 服务器主动断开，尝试重连
-            this.socket?.connect();
+            console.log('服务器主动断开，尝试重连...');
+            setTimeout(() => {
+              this.socket?.connect();
+            }, 1000);
           }
         });
 
@@ -135,6 +142,11 @@ class TranslationWebSocketService {
     this.socket.on('translation_broadcast', (data: TranslationMessage) => {
       console.log('收到翻译广播:', data);
       this.emit('translation_broadcast', data);
+    });
+
+    this.socket.on('room_status', (data) => {
+      console.log('收到房间状态:', data);
+      this.emit('room_status', data);
     });
 
     this.socket.on('heartbeat_ack', (data) => {

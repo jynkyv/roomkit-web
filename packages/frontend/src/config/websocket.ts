@@ -15,11 +15,14 @@ export function getWebSocketUrl(): string {
   const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const config = isDevelopment ? WEBSOCKET_CONFIG.development : WEBSOCKET_CONFIG.production;
   
-  console.log('WebSocket配置调试信息:');
+  console.log('=== WebSocket配置调试信息 ===');
   console.log('当前hostname:', window.location.hostname);
+  console.log('当前URL:', window.location.href);
   console.log('是否开发环境:', isDevelopment);
   console.log('选择的配置:', config);
   console.log('WebSocket URL:', config.url);
+  console.log('完整WebSocket地址:', `${config.url}/translation`);
+  console.log('=== 调试信息结束 ===');
   
   return config.url;
 } 
