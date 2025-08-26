@@ -48,6 +48,21 @@ class TranslationWebSocketService {
   async connect(userId: string, userName: string, roomId: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
+        // 如果已经连接且是同一个用户和房间，直接返回
+        if (this.isConnected && this.currentUserId === userId && this.currentRoomId === roomId) {
+          console.log('WebSocket已经连接到相同的用户和房间，跳过重复连接');
+          resolve();
+          return;
+        }
+        
+        // 如果已有连接，先断开
+        if (this.socket) {
+          console.log('断开现有WebSocket连接');
+          this.socket.disconnect();
+          this.socket = null;
+          this.isConnected = false;
+        }
+        
         console.log('开始连接翻译WebSocket服务...');
         console.log('WebSocket URL:', getWebSocketUrl());
         console.log('Socket.IO配置:', {

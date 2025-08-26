@@ -144,10 +144,6 @@ watch(() => subtitleStore.subtitleResults, (newResults) => {
 const handleTranslationBroadcast = (data: any) => {
   console.log('收到翻译广播:', data);
   
-  // 获取当前用户信息，判断是否是自己发送的消息
-  const currentUserInfo = getUserInfo();
-  const isOwnMessage = currentUserInfo && data.userId === currentUserInfo.userId;
-  
   // 获取语言配置
   const languageConfig = LanguageConfigService.getConfig();
   
@@ -169,7 +165,7 @@ const handleTranslationBroadcast = (data: any) => {
     displayTranslation = data.translation;
   }
   
-  console.log('语言配置智能显示:', {
+  console.log('room.vue语言配置智能显示:', {
     clientSourceLang: languageConfig.sourceLanguage,
     broadcastOriLang: data.oriLang,
     broadcastTargetLang: data.targetLang,

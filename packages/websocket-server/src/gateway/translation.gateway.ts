@@ -165,8 +165,8 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
       this.logger.log(`准备广播消息:`, broadcastData);
       this.logger.log(`广播目标房间: ${roomId}, 发送者客户端: ${client.id}`);
       
-      // 广播给房间内其他用户（排除发送者）
-      this.server.to(roomId).except(client.id).emit('translation_broadcast', broadcastData);
+      // 广播给房间内所有用户（包括发送者，这样每个用户都能看到自己的字幕）
+      this.server.to(roomId).emit('translation_broadcast', broadcastData);
       
       this.logger.log(`广播翻译消息: 用户 ${user.name} (${userId}) 在房间 ${roomId}, 语言: ${oriLang}→${targetLang}`);
     } catch (error) {

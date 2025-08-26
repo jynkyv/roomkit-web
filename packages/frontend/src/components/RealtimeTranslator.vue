@@ -599,6 +599,7 @@ const handleTranslationBroadcast = (data: any) => {
   });
   
   // 添加到全局字幕状态 - 使用智能处理后的数据
+  // 注意：这里只负责存储字幕数据，显示由room.vue负责
   subtitleStore.addSubtitle(
     displayOriginal,      // 智能选择的主字幕
     displayTranslation,   // 智能选择的副字幕
