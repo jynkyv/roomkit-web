@@ -161,33 +161,20 @@ watch(() => subtitleStore.subtitleResults, (newResults) => {
 const handleTranslationBroadcast = (data: any) => {
   console.log('收到翻译广播:', data);
   
-  // 获取语言配置
-  const languageConfig = LanguageConfigService.getConfig();
-  
-  // 根据语言配置决定显示内容
+  // 根据发送方的实际语言决定主字幕显示
+  // 发送方的源语言(oriLang)就是他们实际说的语言，应该作为主字幕显示
   let displayOriginal: string;
   let displayTranslation: string;
   
-  if (data.oriLang === languageConfig.sourceLanguage) {
-    // 如果广播的源语言是本客户端的源语言，显示original作为主字幕
-    displayOriginal = data.original;
-    displayTranslation = data.translation;
-  } else if (data.targetLang === languageConfig.sourceLanguage) {
-    // 如果广播的目标语言是本客户端的源语言，显示translation作为主字幕
-    displayOriginal = data.translation;
-    displayTranslation = data.original;
-  } else {
-    // 默认显示（兼容性处理）
-    displayOriginal = data.original;
-    displayTranslation = data.translation;
-  }
+  // 发送方的源语言是他们实际说的语言，应该作为主字幕
+  displayOriginal = data.original;  // 发送方说的语言（主字幕）
+  displayTranslation = data.translation;  // 翻译后的语言（副字幕）
   
-  console.log('room.vue语言配置智能显示:', {
-    clientSourceLang: languageConfig.sourceLanguage,
-    broadcastOriLang: data.oriLang,
-    broadcastTargetLang: data.targetLang,
-    displayOriginal,
-    displayTranslation
+  console.log('room.vue字幕显示逻辑:', {
+    senderOriLang: data.oriLang,      // 发送方说的语言
+    senderTargetLang: data.targetLang, // 发送方翻译的目标语言
+    displayOriginal,                   // 主字幕（发送方说的语言）
+    displayTranslation                 // 副字幕（翻译后的语言）
   });
   
   // 显示字幕，使用实际的用户名

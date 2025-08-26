@@ -569,40 +569,26 @@ const handleWebSocketError = (data: any) => {
 const handleTranslationBroadcast = (data: any) => {
   console.log('收到翻译广播:', data);
   
-  // 获取语言配置
-  const currentLanguageConfig = LanguageConfigService.getConfig();
-  
-  // 根据语言配置决定显示内容
+  // 根据发送方的实际语言决定主字幕显示
+  // 发送方的源语言(oriLang)就是他们实际说的语言，应该作为主字幕显示
   let displayOriginal: string;
   let displayTranslation: string;
   
-  if (data.oriLang === currentLanguageConfig.sourceLanguage) {
-    // 如果广播的源语言是本客户端的源语言，显示original作为主字幕
-    displayOriginal = data.original;
-    displayTranslation = data.translation;
-  } else if (data.targetLang === currentLanguageConfig.sourceLanguage) {
-    // 如果广播的目标语言是本客户端的源语言，显示translation作为主字幕
-    displayOriginal = data.translation;
-    displayTranslation = data.original;
-  } else {
-    // 默认显示（兼容性处理）
-    displayOriginal = data.original;
-    displayTranslation = data.translation;
-  }
+  // 发送方的源语言是他们实际说的语言，应该作为主字幕
+  displayOriginal = data.original;  // 发送方说的语言（主字幕）
+  displayTranslation = data.translation;  // 翻译后的语言（副字幕）
   
-  console.log('RealtimeTranslator语言配置智能显示:', {
-    clientSourceLang: currentLanguageConfig.sourceLanguage,
-    broadcastOriLang: data.oriLang,
-    broadcastTargetLang: data.targetLang,
-    displayOriginal,
-    displayTranslation
+  console.log('RealtimeTranslator字幕显示逻辑:', {
+    senderOriLang: data.oriLang,      // 发送方说的语言
+    senderTargetLang: data.targetLang, // 发送方翻译的目标语言
+    displayOriginal,                   // 主字幕（发送方说的语言）
+    displayTranslation                 // 副字幕（翻译后的语言）
   });
   
-  // 添加到全局字幕状态 - 使用智能处理后的数据
-  // 注意：这里只负责存储字幕数据，显示由room.vue负责
+  // 添加到全局字幕状态 - 使用发送方的实际语言作为主字幕
   subtitleStore.addSubtitle(
-    displayOriginal,      // 智能选择的主字幕
-    displayTranslation,   // 智能选择的副字幕
+    displayOriginal,      // 主字幕（发送方说的语言）
+    displayTranslation,   // 副字幕（翻译后的语言）
     data.userName || `用户${data.userId}` // 用户名
   );
 };
