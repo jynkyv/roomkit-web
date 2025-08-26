@@ -61,13 +61,17 @@ const activeSubtitles = ref<Map<string, {
   timestamp: number;
   userName: string;
   timeoutId: number;
+  order: number; // 添加顺序字段
 }>>(new Map());
 
-// 计算属性：只显示最新的3个字幕
+// 字幕顺序计数器
+let subtitleOrderCounter = 0;
+
+// 计算属性：只显示最新的3个字幕，按添加顺序排序
 const displaySubtitles = computed(() => {
   const subtitles = Array.from(activeSubtitles.value.entries());
-  // 按时间戳排序，最新的在前
-  subtitles.sort((a, b) => b[1].timestamp - a[1].timestamp);
+  // 按添加顺序排序，先添加的在前面（先到先占位）
+  subtitles.sort((a, b) => a[1].order - b[1].order);
   // 只返回最新的3个
   return subtitles.slice(0, 3);
 });
@@ -90,22 +94,35 @@ const showSubtitle = (original: string, translation: string, userName?: string) 
   const existingSubtitle = activeSubtitles.value.get(userId);
   if (existingSubtitle) {
     clearTimeout(existingSubtitle.timeoutId);
+    // 如果是同一用户的更新，保持原有顺序
+    activeSubtitles.value.set(userId, {
+      original,
+      translation,
+      id: Date.now(),
+      timestamp: Date.now(),
+      userName: displayUserName,
+      timeoutId: window.setTimeout(() => {
+        activeSubtitles.value.delete(userId);
+      }, 5000),
+      order: existingSubtitle.order // 保持原有顺序
+    });
+  } else {
+    // 新用户，分配新的顺序
+    const subtitleId = Date.now();
+    const timeoutId = window.setTimeout(() => {
+      activeSubtitles.value.delete(userId);
+    }, 5000); // 5秒后自动隐藏
+    
+    activeSubtitles.value.set(userId, {
+      original,
+      translation,
+      id: subtitleId,
+      timestamp: Date.now(),
+      userName: displayUserName,
+      timeoutId,
+      order: ++subtitleOrderCounter
+    });
   }
-  
-  // 创建新的字幕条目
-  const subtitleId = Date.now();
-  const timeoutId = window.setTimeout(() => {
-    activeSubtitles.value.delete(userId);
-  }, 5000); // 5秒后自动隐藏
-  
-  activeSubtitles.value.set(userId, {
-    original,
-    translation,
-    id: subtitleId,
-    timestamp: Date.now(),
-    userName: displayUserName,
-    timeoutId
-  });
 };
 
 // 兼容性函数（保留原有逻辑）
