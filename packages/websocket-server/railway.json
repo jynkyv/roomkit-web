@@ -4,10 +4,15 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "npm run start:prod",
+    "startCommand": "pnpm run start:prod",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
+  },
+  "nixpacks": {
+    "build": {
+      "cmds": ["pnpm install --no-frozen-lockfile", "pnpm run build"]
+    }
   }
 }
