@@ -11,7 +11,7 @@
   },
   "nixpacks": {
     "build": {
-      "cmds": ["pnpm install --no-frozen-lockfile"]
+      "cmds": ["npm install"]
     }
   }
 } 
