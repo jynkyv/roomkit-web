@@ -62,6 +62,7 @@ const activeSubtitles = ref<Map<string, {
   userName: string;
   timeoutId: number;
   order: number; // 添加顺序字段
+  subtitleId?: string; // 字幕唯一ID
 }>>(new Map());
 
 // 字幕顺序计数器
@@ -86,41 +87,45 @@ const subtitleTimeout = ref<number | null>(null);
 
 
 // 多用户字幕显示函数
-const showSubtitle = (original: string, translation: string, userName?: string) => {
+const showSubtitle = (original: string, translation: string, userName?: string, subtitleId?: string) => {
   const displayUserName = userName || '未知用户';
-  const userId = displayUserName; // 使用用户名作为唯一标识
   
-  // 清除该用户的旧定时器
-  const existingSubtitle = activeSubtitles.value.get(userId);
+  // 如果有字幕ID，使用字幕ID作为标识；否则使用用户名
+  const identifier = subtitleId || displayUserName;
+  
+  // 清除该字幕的旧定时器
+  const existingSubtitle = activeSubtitles.value.get(identifier);
   if (existingSubtitle) {
     clearTimeout(existingSubtitle.timeoutId);
-    // 如果是同一用户的更新，保持原有顺序
-    activeSubtitles.value.set(userId, {
+    // 如果是同一字幕的更新，保持原有顺序
+    activeSubtitles.value.set(identifier, {
       original,
       translation,
       id: Date.now(),
       timestamp: Date.now(),
       userName: displayUserName,
       timeoutId: window.setTimeout(() => {
-        activeSubtitles.value.delete(userId);
+        activeSubtitles.value.delete(identifier);
       }, 5000),
-      order: existingSubtitle.order // 保持原有顺序
+      order: existingSubtitle.order, // 保持原有顺序
+      subtitleId // 保存字幕ID
     });
   } else {
-    // 新用户，分配新的顺序
-    const subtitleId = Date.now();
+    // 新字幕，分配新的顺序
+    const localSubtitleId = Date.now();
     const timeoutId = window.setTimeout(() => {
-      activeSubtitles.value.delete(userId);
+      activeSubtitles.value.delete(identifier);
     }, 5000); // 5秒后自动隐藏
     
-    activeSubtitles.value.set(userId, {
+    activeSubtitles.value.set(identifier, {
       original,
       translation,
-      id: subtitleId,
+      id: localSubtitleId,
       timestamp: Date.now(),
       userName: displayUserName,
       timeoutId,
-      order: ++subtitleOrderCounter
+      order: ++subtitleOrderCounter,
+      subtitleId // 保存字幕ID
     });
   }
 };
@@ -187,12 +192,14 @@ const handleTranslationBroadcast = (data: any) => {
     broadcastOriLang: data.oriLang,
     broadcastTargetLang: data.targetLang,
     displayOriginal,
-    displayTranslation
+    displayTranslation,
+    subtitleId: data.id,
+    isPartial: data.isPartial
   });
   
-  // 显示字幕，使用实际的用户名
+  // 显示字幕，使用实际的用户名和字幕ID
   const displayUserName = data.userName || '未知用户';
-  showSubtitle(displayOriginal, displayTranslation, displayUserName);
+  showSubtitle(displayOriginal, displayTranslation, displayUserName, data.id);
 };
 
 // 处理用户加入

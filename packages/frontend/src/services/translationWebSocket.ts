@@ -13,6 +13,7 @@ export interface TranslationUser {
 
 // 简化的翻译消息接口
 export interface TranslationMessage {
+  id?: string; // 字幕唯一ID，可选，用于更新现有字幕
   original: string;
   translation: string;
   userId: string;
@@ -20,6 +21,7 @@ export interface TranslationMessage {
   oriLang: string;
   targetLang: string;
   timestamp: number;
+  isPartial?: boolean; // 是否为部分结果
 }
 
 // 系统消息接口
@@ -188,7 +190,7 @@ class TranslationWebSocketService {
   }
 
   // 发送翻译消息
-  sendTranslationMessage(zhText: string, jaText: string): void {
+  sendTranslationMessage(zhText: string, jaText: string, subtitleId?: string, isPartial: boolean = false): void {
     const languageConfig = LanguageConfigService.getConfig();
     console.log('发送翻译消息:', { 
       zhText, 
@@ -196,17 +198,27 @@ class TranslationWebSocketService {
       userId: this.currentUserId, 
       roomId: this.currentRoomId,
       oriLang: languageConfig.sourceLanguage,
-      targetLang: languageConfig.targetLanguage
+      targetLang: languageConfig.targetLanguage,
+      subtitleId,
+      isPartial
     });
     
-    this.sendMessage('translation_message', {
+    const messageData: any = {
       original: zhText,        // 有道翻译的原始字段名
       translation: jaText,     // 有道翻译的原始字段名
       userId: this.currentUserId,
       oriLang: languageConfig.sourceLanguage,  // 源语言
       targetLang: languageConfig.targetLanguage, // 目标语言
       timestamp: Date.now(),
-    });
+      isPartial,
+    };
+    
+    // 如果有字幕ID，添加到消息中（用于更新现有字幕）
+    if (subtitleId) {
+      messageData.id = subtitleId;
+    }
+    
+    this.sendMessage('translation_message', messageData);
   }
 
   // 发送心跳

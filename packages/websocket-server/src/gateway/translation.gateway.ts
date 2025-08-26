@@ -127,12 +127,13 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
   @SubscribeMessage('translation_message')
   handleTranslationMessage(client: Socket, data: any) {
     try {
-      const { original, translation, userId, oriLang, targetLang, timestamp } = data;
+      const { id, original, translation, userId, oriLang, targetLang, timestamp, isPartial } = data;
       const userInfo = this.clientToUser.get(client.id);
       
       this.logger.log(`收到翻译消息: 客户端 ${client.id}, 用户 ${userId}`);
       this.logger.log(`用户信息:`, userInfo);
       this.logger.log(`语言信息: 源语言=${oriLang}, 目标语言=${targetLang}`);
+      this.logger.log(`字幕ID: ${id || '新字幕'}, 部分结果: ${isPartial || false}`);
       
       if (!userInfo) {
         throw new Error('用户未登录');
@@ -164,8 +165,9 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
       const roomUsers = this.roomService.getRoomUsers(roomId);
       this.logger.log(`房间 ${roomId} 用户列表:`, roomUsers);
       
-      // 构建广播数据，包含语言信息
+      // 构建广播数据，包含语言信息和字幕ID
       const broadcastData = {
+        id, // 字幕唯一ID，用于客户端识别和更新
         original,
         translation,
         userId,
@@ -173,6 +175,7 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
         oriLang,
         targetLang,
         timestamp,
+        isPartial: isPartial || false,
       };
       
       this.logger.log(`准备广播消息:`, broadcastData);

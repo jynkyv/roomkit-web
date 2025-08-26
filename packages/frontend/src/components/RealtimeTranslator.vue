@@ -320,36 +320,39 @@ const connectWebSocket = async (): Promise<void> => {
                 const currentUserName = userInfo?.userName || '未知用户';
                 
                 // 处理流式字幕显示
+                const currentUserId = userInfo?.userId || 'unknown';
+                
                 if (result.partial) {
                   // 部分结果：更新当前正在识别的字幕
-                  if (subtitleStore.subtitleResults.length === 0) {
+                  const existingSubtitle = subtitleStore.getSubtitleByUserId(currentUserId);
+                  if (!existingSubtitle) {
                     // 如果是第一个部分结果，创建新的字幕条目
                     subtitleStore.addSubtitle(
                       result.context || '',
                       result.tranContent,
                       currentUserName,
+                      currentUserId,
                       true // 标记为部分结果
                     );
                   } else {
-                    // 更新最后一个字幕条目
-                    subtitleStore.updateLastSubtitle(
+                    // 更新现有字幕条目
+                    subtitleStore.updateSubtitleByUserId(
+                      currentUserId,
                       result.context || '',
                       result.tranContent
                     );
                   }
                 } else {
                   // 完整结果：完成当前字幕
-                  if (subtitleStore.subtitleResults.length > 0) {
-                    // 完成最后一个部分字幕
-                    subtitleStore.completeLastSubtitle();
-                  }
+                  subtitleStore.completeSubtitle(currentUserId);
                   
                   // 如果还没有字幕条目，创建一个完整的字幕
-                  if (subtitleStore.subtitleResults.length === 0) {
+                  if (!subtitleStore.getSubtitleByUserId(currentUserId)) {
                     subtitleStore.addSubtitle(
                       result.context || '',
                       result.tranContent,
                       currentUserName,
+                      currentUserId,
                       false // 标记为完整结果
                     );
                   }
@@ -595,16 +598,35 @@ const handleTranslationBroadcast = (data: any) => {
     broadcastOriLang: data.oriLang,
     broadcastTargetLang: data.targetLang,
     displayOriginal,
-    displayTranslation
+    displayTranslation,
+    subtitleId: data.id,
+    isPartial: data.isPartial
   });
   
-  // 添加到全局字幕状态 - 使用智能处理后的数据
-  // 注意：这里只负责存储字幕数据，显示由room.vue负责
-  subtitleStore.addSubtitle(
-    displayOriginal,      // 智能选择的主字幕
-    displayTranslation,   // 智能选择的副字幕
-    data.userName || `用户${data.userId}` // 用户名
-  );
+  // 检查是否有字幕ID，如果有则更新现有字幕，否则添加新字幕
+  if (data.id) {
+    // 更新现有字幕
+    const updated = subtitleStore.updateSubtitleById(data.id, displayOriginal, displayTranslation);
+    if (!updated) {
+      // 如果更新失败（字幕不存在），则添加新字幕
+      subtitleStore.addSubtitle(
+        displayOriginal,
+        displayTranslation,
+        data.userName || `用户${data.userId}`,
+        data.userId,
+        data.isPartial || false
+      );
+    }
+  } else {
+    // 添加新字幕
+    subtitleStore.addSubtitle(
+      displayOriginal,
+      displayTranslation,
+      data.userName || `用户${data.userId}`,
+      data.userId,
+      data.isPartial || false
+    );
+  }
 };
 
 const handleUserJoin = (data: any) => {
