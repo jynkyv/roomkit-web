@@ -13,6 +13,7 @@ type SideBarType =
   | 'transfer-leave'
   | 'apply'
   | 'aiTranscription'
+  | 'translationHistory'
   | '';
 type SceneType = 'chat' | 'default';
 

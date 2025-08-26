@@ -88,4 +88,6 @@ export default {
   '3. Restart the browser': '3. ブラウザを再起動',
   'Clear Cache & Retry': 'キャッシュをクリアして再試行',
   'Dismiss': '無視',
+  'Original': '原文',
+  'Partial result': '部分結果',
 }; 

@@ -1,9 +1,17 @@
 <template>
   <div class="room-container">
-    <!-- 左侧会议内容 -->
-    <div class="room-content">
-      <!-- 现有的房间组件 -->
-      <conference-main-view display-mode="permanent"></conference-main-view>
+    <!-- 主内容区域 -->
+    <div class="room-main">
+      <!-- 左侧会议内容 -->
+      <div class="room-content">
+        <!-- 现有的房间组件 -->
+        <conference-main-view display-mode="permanent"></conference-main-view>
+      </div>
+
+      <!-- 翻译历史侧边栏 -->
+      <div v-if="showTranslationHistory" class="translation-history-sidebar">
+        <translation-history />
+      </div>
     </div>
 
     <!-- 多用户字幕显示 -->
@@ -46,12 +54,22 @@ import { useUIKit } from '@tencentcloud/uikit-base-component-vue3';
 import { translationWebSocketService } from '../services/translationWebSocket';
 import { useSubtitleStore } from '../stores/subtitle';
 import { LanguageConfigService } from '../services/languageConfig';
+import TranslationHistory from '../components/TranslationHistory.vue';
+import { useBasicStore } from '../components/TUIRoom/stores/basic';
 
 const { t } = useI18n();
 const { theme } = useUIKit();
 
+// 基础store
+const basicStore = useBasicStore();
+
 // 字幕store
 const subtitleStore = useSubtitleStore();
+
+// 计算属性 - 是否显示翻译历史
+const showTranslationHistory = computed(() => {
+  return basicStore.sidebarName === 'translationHistory';
+});
 
 // 多用户字幕状态管理
 const activeSubtitles = ref<Map<string, {
@@ -379,10 +397,7 @@ onMounted(async () => {
   //   // showHistoryPanel.value = event.detail.show; // Removed
   // });
   
-  // 监听清空历史事件
-  // window.addEventListener('clear-translation-history', () => {
-  //   // translationHistory.value = []; // Removed
-  // });
+
   
   const userInfo = getUserInfo();
   const roomInfo = getRoomInfo();
@@ -538,14 +553,28 @@ const goToPage = (routePath: string) => {
   width: 100%;
   height: 100%;
   display: flex;
+  flex-direction: column;
+}
+
+.room-main {
+  flex: 1;
+  display: flex;
   flex-direction: row;
+  min-height: 0;
 }
 
 .room-content {
   flex: 1;
   min-width: 0; /* 防止flex子元素溢出 */
-  width: 100%;
   height: 100%;
+}
+
+.translation-history-sidebar {
+  width: 400px;
+  height: 100%;
+  background-color: var(--bg-color-dialog, #f8f9fa);
+  border-left: 1px solid var(--stroke-color-primary, #e9ecef);
+  overflow: hidden;
 }
 
 /* 字幕样式 */
@@ -598,6 +627,17 @@ const goToPage = (routePath: string) => {
 }
 
 @media (max-width: 768px) {
+  .room-main {
+    flex-direction: column;
+  }
+  
+  .translation-history-sidebar {
+    width: 100%;
+    height: 300px;
+    border-left: none;
+    border-top: 1px solid var(--stroke-color-primary, #e9ecef);
+  }
+  
   .subtitle-container {
     bottom: 60px;
     padding: 0 15px;
@@ -617,16 +657,6 @@ const goToPage = (routePath: string) => {
   
   .subtitle-translation {
     font-size: 12px;
-  }
-  
-  /* 移动端历史面板样式 */
-  .room-container.with-history .room-content {
-    width: 0;
-    overflow: hidden;
-  }
-  
-  .history-panel {
-    width: 100%;
   }
 }
 </style>

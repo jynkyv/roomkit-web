@@ -46,6 +46,10 @@
         class="center-container-item"
         @click="handleControlClick('translationControl')"
       />
+      <translation-history-control
+        class="center-container-item"
+        @click="handleControlClick('translationHistoryControl')"
+      />
       <master-apply-control
         v-if="roomStore.isSpeakAfterTakingSeatMode && (isMaster || isAdmin)"
         class="center-container-item"
@@ -92,6 +96,7 @@ import WhiteboardControl from '../WhiteboardControl.vue';
 import VirtualBackground from '../VirtualBackground.vue';
 import AIControl from '../AIControl.vue';
 import TranslationControl from '../TranslationControl.vue';
+import TranslationHistoryControl from '../TranslationHistoryControl.vue';
 import BasicBeauty from '../BasicBeauty.vue';
 import bus from '../../../hooks/useMitt';
 

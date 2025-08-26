@@ -137,4 +137,6 @@ export default {
   'Translation Settings': '翻译设置',
   'Save': '保存',
   'Reset': '重置',
+  'Original': '原文',
+  'Partial result': '部分结果',
 };
