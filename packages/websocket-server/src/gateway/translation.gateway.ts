@@ -41,6 +41,11 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
   afterInit(server: Server) {
     this.logger.log('WebSocket Gateway 初始化完成');
     this.heartbeatService.startHeartbeatMonitoring();
+    
+    // 启动定期清理任务
+    setInterval(() => {
+      this.cleanupInvalidConnections();
+    }, 5 * 60 * 1000); // 每5分钟清理一次
   }
 
   handleConnection(client: Socket) {
@@ -136,12 +141,20 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
       const { roomId } = userInfo;
       this.logger.log(`房间ID: ${roomId}`);
       
-      // 验证用户身份
+      // 验证用户身份 - 使用clientToUser中的数据而不是重新查询
+      if (userInfo.userId !== userId) {
+        throw new Error('用户ID不匹配');
+      }
+      
+      // 同步用户数据，确保数据一致性
+      this.syncUserData(userId, roomId);
+      
+      // 获取用户详细信息用于广播
       const user = this.userService.getUser(userId);
       this.logger.log(`用户验证结果:`, user);
       
-      if (!user || user.roomId !== roomId) {
-        throw new Error('用户信息不匹配');
+      if (!user) {
+        throw new Error('用户数据同步失败');
       }
       
       // 更新房间活动时间
@@ -249,5 +262,48 @@ export class TranslationGateway implements OnGatewayInit, OnGatewayConnection, O
     } catch (error) {
       this.logger.error('发送房间状态失败:', error);
     }
+  }
+
+  // 同步用户数据，确保clientToUser和UserService的数据一致
+  private syncUserData(userId: string, roomId: string, userName?: string): void {
+    try {
+      let user = this.userService.getUser(userId);
+      
+      if (!user) {
+        // 如果UserService中没有用户信息，添加用户
+        const defaultUserName = userName || `用户${userId.slice(-4)}`;
+        user = this.userService.addUser(userId, defaultUserName, roomId);
+        this.roomService.addUserToRoom(roomId, userId);
+        this.logger.log(`同步用户数据: 重新添加用户 ${defaultUserName} (${userId}) 到房间 ${roomId}`);
+      } else if (user.roomId !== roomId) {
+        // 如果用户房间不匹配，更新用户房间
+        this.userService.removeUser(userId);
+        this.roomService.removeUserFromRoom(user.roomId, userId);
+        user = this.userService.addUser(userId, user.name, roomId);
+        this.roomService.addUserToRoom(roomId, userId);
+        this.logger.log(`同步用户数据: 更新用户 ${user.name} (${userId}) 房间从 ${user.roomId} 到 ${roomId}`);
+      }
+    } catch (error) {
+      this.logger.error('同步用户数据失败:', error);
+    }
+  }
+
+  // 清理无效的客户端连接
+  private cleanupInvalidConnections(): void {
+    const clientsToRemove: string[] = [];
+    
+    for (const [clientId, userInfo] of this.clientToUser.entries()) {
+      const user = this.userService.getUser(userInfo.userId);
+      if (!user) {
+        this.logger.warn(`发现无效连接: 客户端 ${clientId} 对应的用户 ${userInfo.userId} 不存在，准备清理`);
+        clientsToRemove.push(clientId);
+      }
+    }
+    
+    clientsToRemove.forEach(clientId => {
+      this.clientToUser.delete(clientId);
+      this.heartbeatService.removeClient(clientId);
+      this.logger.log(`已清理无效连接: ${clientId}`);
+    });
   }
 }
