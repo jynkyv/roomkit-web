@@ -6,13 +6,12 @@ WORKDIR /app
 
 # 复制package文件
 COPY package*.json ./
-COPY pnpm-lock.yaml ./
 
 # 安装pnpm
 RUN npm install -g pnpm
 
 # 安装依赖
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 # 复制源代码
 COPY . .
