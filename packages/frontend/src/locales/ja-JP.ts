@@ -18,6 +18,7 @@ export default {
   'Please enter a standardised English name': '標準的な英語名を入力してください',
   'Verification code': '認証コードを入力してください',
   'Email address': 'メールアドレスを入力してください',
+  'Password': 'パスワード',
   'Please enter a valid phone number!': '正しい電話番号を入力してください！',
   'Please enter a valid email address!': '正しいメールアドレスを入力してください！',
   'Please enter your phone number!': '電話番号を入力してください！',

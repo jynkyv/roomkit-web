@@ -18,6 +18,7 @@ export default {
   'Please enter a standardised English name': '请输入符合规范的英文名称',
   'Verification code': '请输入验证码',
   'Email address': '请输入邮箱',
+  'Password': '密码',
   'Please enter a valid phone number!': '请输入正确的手机号！',
   'Please enter a valid email address!': '请输入正确的邮箱地址！',
   'Please enter your phone number!': '请输入手机号！',
