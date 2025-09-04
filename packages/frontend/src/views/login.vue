@@ -52,6 +52,15 @@
         >
           {{ loading ? t('Logging in...') : t('Login') }}
         </button>
+
+        <button 
+          type="button" 
+          class="diagnostic-btn"
+          @click="runNetworkDiagnostics"
+          :disabled="loading"
+        >
+          网络诊断
+        </button>
       </form>
     </div>
   </div>
@@ -63,6 +72,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useI18n } from '../locales/index'
 import i18n from '../locales/index'
+import { NetworkDiagnostics } from '../utils/networkDiagnostics'
 
 const router = useRouter()
 const route = useRoute()
@@ -114,6 +124,26 @@ const handleLogin = async () => {
     } else {
       router.push('/home')
     }
+  }
+}
+
+// 网络诊断
+const runNetworkDiagnostics = async () => {
+  console.log('开始网络诊断...')
+  const networkInfo = NetworkDiagnostics.getNetworkInfo()
+  console.log('网络信息:', networkInfo)
+  
+  const diagnostics = await NetworkDiagnostics.runFullDiagnostics()
+  
+  if (diagnostics.overall) {
+    alert('网络诊断通过！所有连接测试都成功。')
+  } else {
+    let message = '网络诊断发现问题：\n'
+    if (!diagnostics.basicConnectivity) message += '- 基本网络连接失败\n'
+    if (!diagnostics.supabaseConnectivity) message += '- Supabase 服务不可达\n'
+    if (!diagnostics.cors) message += '- CORS 配置可能有问题\n'
+    message += '\n请检查网络连接或联系管理员。'
+    alert(message)
   }
 }
 </script>
@@ -272,6 +302,38 @@ const handleLogin = async () => {
 }
 
 .login-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.diagnostic-btn {
+  background: #6b7280;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.025em;
+  margin-top: 12px;
+  width: 100%;
+}
+
+.diagnostic-btn:hover:not(:disabled) {
+  background: #4b5563;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(107, 114, 128, 0.3);
+}
+
+.diagnostic-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.diagnostic-btn:active:not(:disabled) {
   transform: translateY(0);
 }
 

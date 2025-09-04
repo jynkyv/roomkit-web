@@ -2,13 +2,27 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { createClient } from '@supabase/supabase-js'
 import { conference, RoomEvent } from '@tencentcloud/roomkit-web-vue3'
+// @ts-ignore
 import LibGenerateTestUserSig from '@/config/lib-generate-test-usersig-es.min'
 
 // 创建 Supabase 客户端
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-export const supabase = createClient(supabaseUrl, supabaseKey)
+// 调试信息
+console.log('Supabase 配置:', {
+  url: supabaseUrl ? '已配置' : '未配置',
+  key: supabaseKey ? '已配置' : '未配置',
+  urlValue: supabaseUrl
+})
+
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  }
+})
 
 export interface User {
   id: string
@@ -29,6 +43,84 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 计算属性
   const isAuthenticated = computed(() => !!user.value)
+
+  // 测试 Supabase 连接
+  const testSupabaseConnection = async () => {
+    try {
+      console.log('测试 Supabase 连接...')
+      // 使用更简单的健康检查
+      const { data, error } = await supabase.auth.getSession()
+      if (error && error.message.includes('Failed to fetch')) {
+        console.error('Supabase 连接测试失败 - 网络错误:', error)
+        return false
+      }
+      console.log('Supabase 连接测试成功')
+      return true
+    } catch (err) {
+      console.error('Supabase 连接测试异常:', err)
+      if (err instanceof Error && err.message.includes('Failed to fetch')) {
+        console.error('网络连接失败，可能是 CORS 或网络问题')
+        return false
+      }
+      // 其他错误可能是正常的（比如没有会话）
+      return true
+    }
+  }
+
+  // 带重试的登录函数
+  const loginWithRetry = async (email: string, password: string, maxRetries = 3) => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`登录尝试 ${attempt}/${maxRetries}`)
+        
+        const { data, error: authError } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        })
+
+        if (authError) {
+          console.error('登录错误:', authError)
+          if (attempt === maxRetries) {
+            error.value = authError.message
+            return false
+          }
+          // 等待一段时间后重试
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+          continue
+        }
+
+        if (data.user) {
+          user.value = {
+            id: data.user.id,
+            email: data.user.email!,
+            name: data.user.user_metadata?.name,
+            avatar_url: data.user.user_metadata?.avatar_url
+          }
+          console.log('登录成功')
+          return true
+        }
+        
+        return false
+      } catch (err) {
+        console.error(`登录尝试 ${attempt} 失败:`, err)
+        if (attempt === maxRetries) {
+          if (err instanceof Error) {
+            if (err.message.includes('Failed to fetch')) {
+              error.value = '网络连接失败，请检查网络连接或 Supabase 配置'
+            } else {
+              error.value = err.message
+            }
+          } else {
+            error.value = '登录失败，请重试'
+          }
+          return false
+        }
+        // 等待一段时间后重试
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+      }
+    }
+    return false
+  }
 
   // 生成腾讯云会议用户信息
   const generateTencentCloudUserInfo = (authUser: User) => {
@@ -71,28 +163,25 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     
     try {
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      })
-
-      if (authError) {
-        error.value = authError.message
+      // 检查环境变量是否配置
+      if (!supabaseUrl || !supabaseKey) {
+        error.value = 'Supabase 配置缺失，请检查环境变量'
         return false
       }
 
-      if (data.user) {
-        user.value = {
-          id: data.user.id,
-          email: data.user.email!,
-          name: data.user.user_metadata?.name,
-          avatar_url: data.user.user_metadata?.avatar_url
-        }
-        return true
+      // 先测试连接
+      const connectionOk = await testSupabaseConnection()
+      if (!connectionOk) {
+        error.value = '无法连接到 Supabase 服务，请检查网络连接'
+        return false
       }
+
+      // 使用重试机制登录
+      const success = await loginWithRetry(email, password)
+      return success
       
-      return false
     } catch (err) {
+      console.error('登录错误:', err)
       error.value = '登录失败，请重试'
       return false
     } finally {
@@ -145,6 +234,8 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     logout,
     setupAuthListener,
-    setupConferenceLogoutListener
+    setupConferenceLogoutListener,
+    testSupabaseConnection,
+    loginWithRetry
   }
 }) 
