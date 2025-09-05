@@ -10,7 +10,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
-      pinia: path.resolve(__dirname, './node_modules/pinia'),
       '@TUIRoom': path.resolve(__dirname, 'src/TUIRoom'),
     },
   },
