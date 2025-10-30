@@ -11,6 +11,7 @@ COPY package*.json ./
 RUN npm install -g pnpm
 
 # 安装依赖
+ENV PNPM_CONFIG_FROZEN_LOCKFILE=false
 RUN pnpm install
 
 # 复制源代码
