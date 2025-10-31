@@ -9,18 +9,20 @@
     </icon-button>
     
     <!-- 翻译面板 -->
-    <div v-show="showTranslationPanel" class="translation-panel">
-      <div class="panel-header">
-        <h3>{{ t('Translation') }}</h3>
-        <button class="close-btn" @click="toggleTranslationPanel">×</button>
-      </div>
-      
-      <div class="panel-content">
-        <!-- 直接使用 RealtimeTranslator 组件 -->
-        <RealtimeTranslator 
-          :showTranslator="true"
-          @update:showTranslator="handleTranslatorVisibilityChange"
-        />
+    <div v-show="showTranslationPanel" class="translation-panel-wrapper" @click.self="toggleTranslationPanel">
+      <div class="translation-panel">
+        <div class="panel-header">
+          <h3>{{ t('Translation') }}</h3>
+          <button class="close-btn" @click="toggleTranslationPanel">×</button>
+        </div>
+        
+        <div class="panel-content">
+          <!-- 直接使用 RealtimeTranslator 组件 -->
+          <RealtimeTranslator 
+            :showTranslator="true"
+            @update:showTranslator="handleTranslatorVisibilityChange"
+          />
+        </div>
       </div>
     </div>
   </div>
@@ -67,19 +69,24 @@ const handleTranslatorVisibilityChange = (visible: boolean) => {
   position: relative;
 }
 
-.translation-panel {
+/* 桌面端：绝对定位的面板 */
+.translation-panel-wrapper {
   position: absolute;
   bottom: 100%;
   right: 0;
-  width: 460px; /* 从420px增加到460px */
+  margin-bottom: 10px;
+  z-index: 1000;
+}
+
+.translation-panel {
+  width: 460px;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  margin-bottom: 10px;
-  z-index: 1000;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
   color: #333;
+  overflow: hidden;
 }
 
 .panel-header {
@@ -146,11 +153,55 @@ const handleTranslatorVisibilityChange = (visible: boolean) => {
   z-index: 1000;
 }
 
-/* 响应式设计 */
+/* 手机端：全屏覆盖 */
 @media (max-width: 768px) {
+  .translation-panel-wrapper {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  }
+
   .translation-panel {
-    width: 400px; /* 从360px增加到400px */
-    right: -50px;
+    width: 90%;
+    max-width: 100%;
+    max-height: 90vh;
+    margin: 0;
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .panel-header {
+    flex-shrink: 0;
+    padding: 16px 20px;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .panel-header h3 {
+    font-size: 18px;
+  }
+
+  .close-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 24px;
+  }
+
+  .panel-content {
+    flex: 1;
+    overflow-y: auto;
+    max-height: calc(90vh - 60px);
+    -webkit-overflow-scrolling: touch;
   }
 }
 </style> 

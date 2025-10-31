@@ -210,15 +210,72 @@ watch(() => subtitleStore.subtitleResults, (newResults, oldResults) => {
   }
 }
 
-/* 响应式设计 */
+/* 响应式设计 - 手机端优化 */
 @media (max-width: 768px) {
   .subtitle-overlay {
-    bottom: 80px;
-    width: 95%;
+    bottom: 20px;
+    left: 10px;
+    right: 10px;
+    width: calc(100% - 20px);
+    max-width: 100%;
+    transform: none;
+    padding: 0;
+  }
+  
+  .subtitle-container {
+    gap: 6px;
   }
   
   .subtitle-item {
-    padding: 10px 15px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+  
+  .subtitle-header {
+    margin-bottom: 6px;
+  }
+  
+  .subtitle-header .user {
+    font-size: 12px;
+  }
+  
+  .subtitle-content {
+    gap: 6px;
+  }
+  
+  .original-text {
+    font-size: 15px;
+    line-height: 1.5;
+    word-wrap: break-word;
+    word-break: break-word;
+  }
+  
+  .translated-text {
+    font-size: 13px;
+    line-height: 1.4;
+    word-wrap: break-word;
+    word-break: break-word;
+  }
+}
+
+/* 小屏手机进一步优化 */
+@media (max-width: 480px) {
+  .subtitle-overlay {
+    bottom: 15px;
+    left: 8px;
+    right: 8px;
+    width: calc(100% - 16px);
+  }
+  
+  .subtitle-item {
+    padding: 10px 14px;
+    border-radius: 10px;
+  }
+  
+  .subtitle-header .user {
+    font-size: 11px;
   }
   
   .original-text {
