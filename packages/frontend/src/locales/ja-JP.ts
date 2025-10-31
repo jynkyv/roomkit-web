@@ -103,4 +103,12 @@ export default {
   'Reset': 'リセット',
   'Original': '原文',
   'Partial result': '部分結果',
+  
+  // 名称输入相关
+  'Enter Your Name': 'お名前を入力してください',
+  'Please enter your name to continue': '続行するにはお名前を入力してください',
+  'Your Name': 'お名前',
+  'Please enter your name': 'お名前を入力してください',
+  'Entering...': '入室中...',
+  'Enter': '入室',
 }; 

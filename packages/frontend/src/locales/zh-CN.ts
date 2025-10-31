@@ -140,4 +140,12 @@ export default {
   'Reset': '重置',
   'Original': '原文',
   'Partial result': '部分结果',
+  
+  // 名称输入相关
+  'Enter Your Name': '请输入您的名称',
+  'Please enter your name to continue': '请输入您的名称以继续',
+  'Your Name': '您的名称',
+  'Please enter your name': '请输入您的名称',
+  'Entering...': '进入中...',
+  'Enter': '进入',
 };

@@ -70,10 +70,10 @@ export function getBasicInfo(user = null) {
       avatarUrl: user.avatar_url || '',
     };
   } else {
-    // 默认测试用户信息
+    // 默认测试用户信息（不应该到这里，因为已经有认证了）
     userInfo = {
       userId: `user_${Math.ceil(Math.random() * 100000)}`,
-      userName: 'myName',
+      userName: 'Guest',
       avatarUrl: '',
     };
   }

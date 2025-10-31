@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  websocket-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: websocket-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - HEARTBEAT_INTERVAL=30000
+      - HEARTBEAT_TIMEOUT=60000
+      - ROOM_TIMEOUT=1800000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+

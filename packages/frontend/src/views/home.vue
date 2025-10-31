@@ -129,9 +129,16 @@ async function handleInit() {
   const currentUser = authStore.user;
   console.log('当前认证用户:', currentUser);
   
-  // 获取基本配置信息，传入真实用户信息
+  // 获取基本配置信息，使用新的用户格式
   console.log('正在获取基本配置信息...');
-  const currentUserInfo = getBasicInfo(currentUser);
+  // 将User格式转换为getBasicInfo期望的格式
+  const userForBasicInfo = currentUser ? {
+    id: currentUser.id,
+    name: currentUser.name,
+    email: currentUser.name, // 如果没有email，使用name
+    avatar_url: currentUser.avatarUrl
+  } : null;
+  const currentUserInfo = getBasicInfo(userForBasicInfo);
   console.log('currentUserInfo:', currentUserInfo);
   
   if (!currentUserInfo) {

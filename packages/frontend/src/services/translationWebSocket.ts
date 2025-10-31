@@ -47,8 +47,9 @@ class TranslationWebSocketService {
   private eventListeners: Map<string, Function[]> = new Map();
 
   // 初始化WebSocket连接
+  // 注意：连接失败不会抛出错误，允许应用继续运行，翻译功能会不可用
   async connect(userId: string, userName: string, roomId: string): Promise<void> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       try {
         // 如果已经连接且是同一个用户和房间，直接返回
         if (this.isConnected && this.currentUserId === userId && this.currentRoomId === roomId) {
@@ -85,8 +86,27 @@ class TranslationWebSocketService {
           forceNew: true,
         });
 
+        // 连接超时处理（10秒后如果还没连接成功，给出提示）
+        const connectionTimeout = setTimeout(() => {
+          if (!this.isConnected) {
+            console.warn('WebSocket连接超时，服务器可能未启动');
+            const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            if (isDev) {
+              console.error('❌ WebSocket服务器未运行！');
+              console.error('💡 推荐：运行 pnpm dev 同时启动前端和服务器');
+              console.error('   或单独启动服务器: pnpm dev:server');
+            }
+            this.emit('error', { 
+              message: 'WebSocket连接超时，服务器可能未启动',
+              serverUrl: getWebSocketUrl(),
+              isTimeout: true,
+            });
+          }
+        }, 10000);
+
         this.socket.on('connect', () => {
-          console.log('翻译WebSocket连接成功');
+          clearTimeout(connectionTimeout);
+          console.log('✅ 翻译WebSocket连接成功');
           this.isConnected = true;
           this.resetReconnectState(); // 重置重连状态
           this.emit('connected', { clientId: this.socket?.id });
@@ -101,6 +121,7 @@ class TranslationWebSocketService {
         });
 
         this.socket.on('disconnect', (reason) => {
+          clearTimeout(connectionTimeout);
           console.log('翻译WebSocket连接断开:', reason);
           this.isConnected = false;
           this.emit('disconnected', { reason });
@@ -113,10 +134,43 @@ class TranslationWebSocketService {
         });
 
         this.socket.on('connect_error', (error) => {
-          console.error('翻译WebSocket连接错误:', error);
+          clearTimeout(connectionTimeout);
+          console.error('❌ 翻译WebSocket连接错误:', error);
+          
+          // 提供更友好的错误提示
+          const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          let errorMessage = 'WebSocket连接失败';
+          let detailedMessage = '';
+          
+          if (error.message?.includes('websocket error') || error.message?.includes('xhr poll error')) {
+            detailedMessage = '无法连接到WebSocket服务器';
+            if (isDev) {
+              detailedMessage += '\n\n📋 解决方案：';
+              detailedMessage += '\n推荐：运行 pnpm dev 同时启动前端和服务器';
+              detailedMessage += '\n\n或者分开启动：';
+              detailedMessage += '\n1. 前端: pnpm dev:frontend';
+              detailedMessage += '\n2. 服务器: pnpm dev:server';
+              detailedMessage += '\n\n💡 检查服务器是否运行：访问 http://127.0.0.1:3002/health';
+              detailedMessage += '\n等待服务器启动后刷新页面';
+            } else {
+              detailedMessage += '，请联系管理员';
+            }
+          }
+          
           this.isConnected = false;
-          this.emit('error', { message: error.message || '连接错误' });
-          reject(error);
+          this.emit('error', { 
+            message: errorMessage,
+            detailedMessage,
+            originalError: error.message,
+            serverUrl: getWebSocketUrl(),
+          });
+          
+          // 不立即reject，允许应用继续运行，只是翻译功能不可用
+          // 尝试重连
+          this.attemptReconnect();
+          
+          // 立即resolve，不阻塞应用
+          resolve();
         });
 
         // 监听消息
@@ -124,7 +178,12 @@ class TranslationWebSocketService {
         
       } catch (error) {
         console.error('创建翻译WebSocket连接失败:', error);
-        reject(error);
+        // 即使出错也resolve，不阻塞应用
+        this.emit('error', { 
+          message: '创建WebSocket连接时发生错误',
+          originalError: error instanceof Error ? error.message : String(error),
+        });
+        resolve();
       }
     });
   }

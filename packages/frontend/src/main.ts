@@ -37,6 +37,6 @@ app.use(pinia);
 // 初始化认证状态
 const authStore = useAuthStore();
 authStore.initAuth();
-authStore.setupAuthListener();
+authStore.setupConferenceLogoutListener();
 
 app.mount('#app');

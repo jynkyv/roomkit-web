@@ -12,32 +12,22 @@
 
     <div class="login-card">
       <div class="login-header">
-        <h1>{{ t('Login') }}</h1>
-        <p>{{ t('Please enter your account information') }}</p>
+        <h1>{{ t('Enter Your Name') }}</h1>
+        <p>{{ t('Please enter your name to continue') }}</p>
       </div>
 
       <form @submit.prevent="handleLogin" class="login-form">
         <div class="form-group">
-          <label for="email">{{ t('Email address') }}</label>
+          <label for="userName">{{ t('Your Name') }}</label>
           <input
-            id="email"
-            v-model="email"
-            type="email"
-            :placeholder="t('Please enter your email address!')"
+            id="userName"
+            v-model="userName"
+            type="text"
+            :placeholder="t('Please enter your name')"
             required
             :disabled="loading"
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="password">{{ t('Password') }}</label>
-          <input
-            id="password"
-            v-model="password"
-            type="password"
-            :placeholder="t('Please enter your password')"
-            required
-            :disabled="loading"
+            maxlength="50"
+            autofocus
           />
         </div>
 
@@ -48,9 +38,9 @@
         <button 
           type="submit" 
           class="login-btn"
-          :disabled="loading || !email || !password"
+          :disabled="loading || !userName || !userName.trim()"
         >
-          {{ loading ? t('Logging in...') : t('Login') }}
+          {{ loading ? t('Entering...') : t('Enter') }}
         </button>
 
       </form>
@@ -70,8 +60,7 @@ const route = useRoute()
 const authStore = useAuthStore()
 const { t } = useI18n()
 
-const email = ref('')
-const password = ref('')
+const userName = ref('')
 
 const loading = computed(() => authStore.loading)
 const error = computed(() => authStore.error)
@@ -99,7 +88,7 @@ onMounted(() => {
 })
 
 const handleLogin = async () => {
-  const success = await authStore.login(email.value, password.value)
+  const success = await authStore.login(userName.value)
   if (success) {
     // 优先跳转到redirect参数
     const redirect = route.query.redirect as string

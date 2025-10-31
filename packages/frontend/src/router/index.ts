@@ -34,7 +34,7 @@ router.beforeEach(async (to, from, next) => {
     return;
   }
 
-  // 检查是否需要认证
+  // 检查是否需要认证（有用户名即可）
   if (to.meta.requiresAuth) {
     const authStore = useAuthStore();
     
@@ -43,7 +43,7 @@ router.beforeEach(async (to, from, next) => {
       await authStore.initAuth();
     }
     
-    // 如果未登录，重定向到登录页并带上redirect参数
+    // 如果未登录（没有用户名），重定向到登录页并带上redirect参数
     if (!authStore.isAuthenticated) {
       next(`/login?redirect=${encodeURIComponent(to.fullPath)}`);
       return;

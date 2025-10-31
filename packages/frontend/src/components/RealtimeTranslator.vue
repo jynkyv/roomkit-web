@@ -565,8 +565,41 @@ const handleReconnected = () => {
 
 const handleWebSocketError = (data: any) => {
   console.error('WebSocket错误:', data);
-  error.value = data.message || t('WebSocket error');
+  
+  // 显示更友好的错误消息
+  if (data.detailedMessage) {
+    error.value = data.detailedMessage;
+  } else if (data.message) {
+    error.value = data.message;
+  } else {
+    error.value = t('WebSocket error');
+  }
+  
   connectionStatus.value = t('Connection error');
+  
+  // 如果是开发环境且服务器未启动，在控制台给出明确提示
+  const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  if (isDev && (data.originalError?.includes('websocket error') || data.isTimeout)) {
+    console.error('');
+    console.error('═══════════════════════════════════════════════════════');
+    console.error('❌ WebSocket服务器未运行！');
+    console.error('');
+    console.error('📋 解决方案：');
+    console.error('   推荐：使用 pnpm dev 同时启动前端和服务器');
+    console.error('   在项目根目录运行：');
+    console.error('      pnpm dev');
+    console.error('');
+    console.error('   或者分开启动：');
+    console.error('   1. 前端: pnpm dev:frontend');
+    console.error('   2. 服务器: pnpm dev:server');
+    console.error('');
+    console.error('   等待服务器启动后刷新此页面');
+    console.error('');
+    console.error('💡 提示：检查服务器是否运行：');
+    console.error('   访问: http://127.0.0.1:3002/health');
+    console.error('═══════════════════════════════════════════════════════');
+    console.error('');
+  }
 };
 
 const handleTranslationBroadcast = (data: any) => {
@@ -672,6 +705,7 @@ const getRoomInfo = () => {
 };
 
 // 初始化WebSocket连接
+// 注意：即使连接失败也不会抛出错误，允许应用继续运行
 const initWebSocket = async () => {
   try {
     // 获取用户和房间信息
@@ -679,7 +713,7 @@ const initWebSocket = async () => {
     const roomInfo = getRoomInfo();
     
     if (!userInfo || !roomInfo) {
-      console.error('无法获取用户或房间信息，无法建立WebSocket连接');
+      console.warn('⚠️ 无法获取用户或房间信息，无法建立WebSocket连接');
       connectionStatus.value = t('Connection Failed - Missing Info');
       error.value = t('Failed to get user or room information');
       return;
@@ -701,12 +735,15 @@ const initWebSocket = async () => {
     translationWebSocketService.on('user_join', handleUserJoin);
     translationWebSocketService.on('user_leave', handleUserLeave);
     
+    // 尝试连接（即使失败也不会阻塞应用）
     await translationWebSocketService.connect(userId, userName, roomId);
     
+    console.log('WebSocket连接尝试完成（可能成功或失败，但不影响应用运行）');
+    
   } catch (error) {
-    console.error('WebSocket连接失败:', error);
-    connectionStatus.value = t('Connection Failed');
-    error.value = t('Failed to connect to translation service');
+    // 这里不应该被执行，因为connect现在不会reject
+    console.warn('WebSocket初始化过程出现异常（非致命）:', error);
+    connectionStatus.value = t('Disconnected');
   }
 };
 
