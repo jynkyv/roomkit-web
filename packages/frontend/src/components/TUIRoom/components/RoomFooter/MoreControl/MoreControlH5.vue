@@ -15,7 +15,6 @@
           v-if="roomStore.isSpeakAfterTakingSeatMode"
           @click="handleControlClick('chatControl')"
         />
-        <translation-control @click="handleControlClick('translationControl')" />
         <contact-control @click="handleControlClick('contactControl')" />
         <invite-control
           @show-overlay="handleShowOverlay"
@@ -32,7 +31,6 @@ import { IconExtension } from '@tencentcloud/uikit-base-component-vue3';
 import IconButton from '../../common/base/IconButton.vue';
 import userMoreControl from './useMoreControlHooks';
 import ChatControl from '../ChatControl.vue';
-import TranslationControl from '../TranslationControl.vue';
 import InviteControl from '../InviteControl.vue';
 import ContactControl from '../ContactControl.vue';
 import { useRoomStore } from '../../../stores/room';

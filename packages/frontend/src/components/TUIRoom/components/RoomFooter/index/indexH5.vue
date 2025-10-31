@@ -10,9 +10,8 @@
       :display-mode="MediaSettingDisplayMode.Icon"
       v-tap="() => handleControlClick('videoControl')"
     />
-    <chat-control
-      v-if="!roomStore.isSpeakAfterTakingSeatMode"
-      v-tap="() => handleControlClick('chatControl')"
+    <translation-control
+      v-tap="() => handleControlClick('translationControl')"
     />
     <master-apply-control
       v-if="roomStore.isSpeakAfterTakingSeatMode && (isMaster || isAdmin)"
@@ -39,7 +38,7 @@ import {
   MediaSettingDisplayMode,
 } from '../../../core';
 import ManageMemberControl from '../ManageMemberControl.vue';
-import ChatControl from '../ChatControl.vue';
+import TranslationControl from '../TranslationControl.vue';
 import MasterApplyControl from '../ManageStageControl.vue';
 import MemberApplyControl from '../ApplyControl/MemberApplyControl.vue';
 import MoreControl from '../MoreControl/index';

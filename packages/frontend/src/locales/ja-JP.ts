@@ -89,6 +89,18 @@ export default {
   '3. Restart the browser': '3. ブラウザを再起動',
   'Clear Cache & Retry': 'キャッシュをクリアして再試行',
   'Dismiss': '無視',
+  // 语言配置相关
+  'Language Configuration Required': '言語設定が必要です',
+  'Please configure your translation language settings': '翻訳言語設定を構成してください',
+  'Configure Language': '言語を設定',
+  'Translation Language Settings': '翻訳言語設定',
+  'Configure your source and target languages for translation': '翻訳のためのソース言語とターゲット言語を構成してください',
+  'I speak': '私の母国語',
+  'I want to translate to': '他の人が見る',
+  'Save Configuration': '設定を保存',
+  'Translation Settings': '翻訳設定',
+  'Save': '保存',
+  'Reset': 'リセット',
   'Original': '原文',
   'Partial result': '部分結果',
 }; 
