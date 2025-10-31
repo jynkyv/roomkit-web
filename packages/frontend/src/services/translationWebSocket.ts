@@ -66,25 +66,25 @@ class TranslationWebSocketService {
           this.isConnected = false;
         }
         
-        console.log('开始连接翻译WebSocket服务...');
-        console.log('WebSocket URL:', getWebSocketUrl());
-        console.log('Socket.IO配置:', {
+        const wsUrl = getWebSocketUrl();
+        
+        // Socket.IO配置：所有环境都使用path选项指定路径
+        const socketOptions: any = {
           path: '/translation',
           transports: ['websocket', 'polling'],
           timeout: 10000,
           forceNew: true,
-        });
+        };
+        
+        console.log('开始连接翻译WebSocket服务...');
+        console.log('WebSocket URL:', wsUrl);
+        console.log('Socket.IO配置:', socketOptions);
         
         this.currentUserId = userId;
         this.currentRoomId = roomId;
         
         // 创建Socket.IO连接
-        this.socket = io(getWebSocketUrl(), {
-          path: '/translation',
-          transports: ['websocket', 'polling'],
-          timeout: 10000,
-          forceNew: true,
-        });
+        this.socket = io(wsUrl, socketOptions);
 
         // 连接超时处理（10秒后如果还没连接成功，给出提示）
         const connectionTimeout = setTimeout(() => {
