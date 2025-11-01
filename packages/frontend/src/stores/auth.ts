@@ -41,15 +41,27 @@ export const useAuthStore = defineStore('auth', () => {
   // 生成腾讯云会议用户信息
   const generateTencentCloudUserInfo = (authUser: User) => {
     try {
-      if (SDKAPPID === Number(0) || SDKSECRETKEY === String('')) {
-        throw new Error('请配置腾讯云SDK密钥')
+      // 检查环境变量是否配置（允许字符串 '0' 或空字符串）
+      const appId = import.meta.env.VITE_TENCENT_SDK_APP_ID
+      const secretKey = import.meta.env.VITE_TENCENT_SDK_SECRET_KEY
+      
+      if (!appId || !secretKey || appId === '0' || secretKey === '') {
+        console.warn('⚠️ 腾讯云SDK配置未设置，请配置环境变量：')
+        console.warn('   VITE_TENCENT_SDK_APP_ID')
+        console.warn('   VITE_TENCENT_SDK_SECRET_KEY')
+        throw new Error('请配置腾讯云SDK密钥（环境变量未设置）')
       }
 
-      const generator = new LibGenerateTestUserSig(SDKAPPID, SDKSECRETKEY, EXPIRETIME)
+      const validAppId = Number(appId)
+      if (isNaN(validAppId) || validAppId === 0) {
+        throw new Error('腾讯云SDK App ID无效')
+      }
+
+      const generator = new LibGenerateTestUserSig(validAppId, secretKey, EXPIRETIME)
       const userSig = generator.genTestUserSig(authUser.id)
       
       return {
-        sdkAppId: String(SDKAPPID),
+        sdkAppId: String(validAppId),
         userId: authUser.id,
         userSig,
         userName: authUser.name,

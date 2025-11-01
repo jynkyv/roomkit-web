@@ -12,24 +12,12 @@ import LibGenerateTestUserSig from './lib-generate-test-usersig-es.min';
  *
  */
 
-export const SDKAPPID = Number(import.meta.env.VITE_TENCENT_SDK_APP_ID);
+// 从环境变量读取（如果未配置则为 undefined）
+const envAppId = import.meta.env.VITE_TENCENT_SDK_APP_ID;
+const envSecretKey = import.meta.env.VITE_TENCENT_SDK_SECRET_KEY;
 
-/**
- * Encryption key for calculating signature, which can be obtained in the following steps:
- *
- * Step1. Enter Tencent Cloud TRTC [Console](https://console.cloud.tencent.com/rav ),
- * and create an application if you don't have one.
- * Step2. Click your application to find "Quick Start".
- * Step3. Click "View Secret Key" to see the encryption key for calculating UserSig,
- * and copy it to the following variable.
- *
- * Notes: this method is only applicable for debugging Demo. Before official launch,
- * please migrate the UserSig calculation code and key to your backend server to avoid
- * unauthorized traffic use caused by the leakage of encryption key.
- * Document: https://intl.cloud.tencent.com/document/product/647/35166#Server
- *
- */
-export const SDKSECRETKEY = import.meta.env.VITE_TENCENT_SDK_SECRET_KEY ;
+export const SDKAPPID = envAppId ? Number(envAppId) : 0;
+export const SDKSECRETKEY = envSecretKey || '';
 
 /**
  * Signature expiration time, which should not be too short
@@ -56,9 +44,19 @@ export const userInfo = {
  * 修改 getBasicInfo 函数，接收真实的用户信息
  */
 export function getBasicInfo(user = null) {
-  if (SDKAPPID === Number(0) || SDKSECRETKEY === String('')) {
-    alert('Please configure your SDKAPPID in config/basic-info-config.js');
-    return;
+  // 检查环境变量是否配置
+  const appId = envAppId;
+  const secretKey = envSecretKey;
+  
+  if (!appId || !secretKey || appId === '0' || secretKey === '' || isNaN(Number(appId))) {
+    console.error('❌ 腾讯云SDK配置未设置！');
+    console.error('请在项目根目录创建 packages/frontend/.env.production 文件，并配置：');
+    console.error('   VITE_TENCENT_SDK_APP_ID=你的SDKAppID');
+    console.error('   VITE_TENCENT_SDK_SECRET_KEY=你的SecretKey');
+    console.error('或者在本地创建 .env 文件（用于开发环境）');
+    
+    // 返回 null 而不是 undefined，让调用者可以检查
+    return null;
   }
 
   // 如果有真实用户信息，使用真实用户信息；否则使用默认测试用户信息

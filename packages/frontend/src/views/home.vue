@@ -142,7 +142,10 @@ async function handleInit() {
   console.log('currentUserInfo:', currentUserInfo);
   
   if (!currentUserInfo) {
-    console.error('获取基本配置信息失败');
+    console.error('❌ 获取基本配置信息失败：腾讯云SDK配置未设置');
+    // 显示错误提示但不阻止页面加载
+    alert('请配置腾讯云SDK密钥\n\n请在项目根目录创建 packages/frontend/.env.production 文件\n或联系管理员配置环境变量');
+    // 返回，避免后续代码报错
     return;
   }
   
